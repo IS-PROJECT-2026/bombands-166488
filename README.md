@@ -1,36 +1,60 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# BOMBANDS
 
-## Getting Started
+A multi-game platform inspired by NYT Games, built for our GitHub
+Workflow mini-project. Play Crossword, Word Search, Sudoku, Wordle,
+Scrabble, and Hangman — all in one place, with user accounts to track
+your play.
 
-First, run the development server:
+## Tech Stack
+
+- **Next.js** (App Router, TypeScript, statically exported for GitHub Pages)
+- **Tailwind CSS** for styling
+- **Supabase** for authentication
+- **GitHub Actions** for CI/CD deployment to GitHub Pages
+
+## Games
+
+| Game | Owner |
+|---|---|
+| Sudoku | Kirui Sharlet Jerono |
+| Word Search | Deborah Kaburu |
+| Wordle | Bwibo Ethan Nimrod |
+| Scrabble | Githinji Nathan Rugo |
+| Hangman | Wangeci Brown Kamau |
+| Crossword | Njenga Martin Njuguna |
+
+## Running Locally
+
+```bash
+git clone <repo-url>
+cd bombands-166488
+npm install
+```
+
+Create `.env.local` in the project root with your Supabase credentials:
+
+```
+NEXT_PUBLIC_SUPABASE_URL=your-url
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your-key
+```
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open http://localhost:3000
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Team
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+| Admission No. | Name | Role |
+|---|---|---|
+| 166488 | Bwibo Ethan Nimrod | Repo owner / Wordle |
+| 160588 | Kirui Sharlet Jerono | Sudoku |
+| 166531 | Deborah Kaburu | Word Search |
+| 166386 | Githinji Nathan Rugo | Scrabble |
+| 162831 | Wangeci Brown Kamau | Hangman |
+| 165852 | Njenga Martin Njuguna | Crossword |
 
-## Learn More
+## Live Site
 
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Deployed via GitHub Pages: *link once first deploy succeeds*
