@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import { usePathname } from 'next/navigation'
 
 const games = [
   { name: 'Crossword', href: '/games/crossword' },
@@ -12,12 +13,20 @@ const games = [
 ]
 
 export default function Navbar() {
+  const pathname = usePathname()
+
   return (
     <nav className="flex items-center justify-between px-6 py-4 border-b">
       <Link href="/" className="font-bold text-lg">BOMBANDS</Link>
       <div className="flex gap-4">
         {games.map((game) => (
-          <Link key={game.href} href={game.href} className="text-sm hover:underline">
+          <Link
+            key={game.href}
+            href={game.href}
+            className={`text-sm hover:underline ${
+              pathname === game.href ? 'font-semibold underline' : ''
+            }`}
+          >
             {game.name}
           </Link>
         ))}
