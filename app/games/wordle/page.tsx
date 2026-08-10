@@ -84,6 +84,26 @@ const KEYBOARD_ROWS = [
   ['enter', 'z', 'x', 'c', 'v', 'b', 'n', 'm', 'backspace'],
 ]
 
+function buildShareText(guesses: string[], target: string, mode: string): string {
+  const emojiMap: Record<LetterStatus, string> = {
+    correct: '🟩',
+    present: '🟨',
+    absent: '⬛',
+    empty: '⬜',
+  }
+  const grid = guesses
+    .map((guess) =>
+      evaluateGuess(guess, target)
+        .map((s) => emojiMap[s])
+        .join('')
+    )
+    .join('\n')
+
+  const label = mode === 'daily' ? 'Daily' : 'Practice'
+  return `BOMBANDS Wordle (${label}) ${guesses.length}/${MAX_GUESSES}\nPlay NOW: https://is-project-2026.github.io/bombands-166488/games/wordle\n\n${grid}`
+}
+
+
 export default function WordlePage() {
   const [mode, setMode] = useState<'daily' | 'practice'>('daily')
   const [target, setTarget] = useState('')
@@ -129,6 +149,15 @@ export default function WordlePage() {
       return true
     }
   }
+
+  const [copied, setCopied] = useState(false)
+
+async function handleShare() {
+  const text = buildShareText(guesses, target, mode)
+  await navigator.clipboard.writeText(text)
+  setCopied(true)
+  setTimeout(() => setCopied(false), 2000)
+}
 
   const submitGuess = useCallback(async () => {
     if (status !== 'playing' || isValidating || isLoadingWord) return
@@ -296,6 +325,15 @@ export default function WordlePage() {
       {status === 'lost' && (
         <p className="text-red-600 font-bold">Out of guesses — the word was {target.toUpperCase()}</p>
       )}
+
+      {(status === 'won' || status === 'lost') && (
+        <button
+            onClick={handleShare}
+            className="px-4 py-2 rounded bg-white text-black font-semibold"
+        >
+            {copied ? 'Copied!' : 'Share Results'}
+        </button>
+        )}
 
       <div className="flex flex-col gap-1 mt-4">
         {KEYBOARD_ROWS.map((row, i) => (
