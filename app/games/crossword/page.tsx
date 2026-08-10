@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { RefreshCw, Check, Eye } from 'lucide-react';
 
 type WordEntry = { word: string; clue: string };
@@ -151,17 +151,46 @@ export default function CrosswordPage() {
   const [placements, setPlacements] = useState<Placement[]>([]);
   const [bounds, setBounds] = useState({ minR: 0, maxR: 0, minC: 0, maxC: 0 });
   const [numbers, setNumbers] = useState<(number | null)[][]>([]);
+  const [userGrid, setUserGrid] = useState<(string | null)[][]>([]);
+  const inputRefs = useRef<Record<string, HTMLInputElement | null>>({});
 
   const newPuzzle = useCallback(() => {
     const gen = generateCrossword();
     const b = computeBounds(gen.grid);
+    const rows = b.maxR - b.minR + 1, cols = b.maxC - b.minC + 1;
     setSolution(gen.grid);
     setPlacements(gen.placed);
     setBounds(b);
     setNumbers(buildNumbers(gen.grid, b));
+    setUserGrid(Array.from({ length: rows }, () => Array(cols).fill(null)));
   }, []);
 
   useEffect(() => { newPuzzle(); }, [newPuzzle]);
+
+  function handleInput(r: number, c: number, raw: string) {
+    const v = raw.toUpperCase().replace(/[^A-Z]/, '');
+    setUserGrid(prev => {
+      const next = prev.map(row => [...row]);
+      next[r][c] = v || null;
+      return next;
+    });
+    if (v) {
+      const cols = bounds.maxC - bounds.minC + 1;
+      for (let cc = c + 1; cc < cols; cc++) {
+        const el = inputRefs.current[`${r}-${cc}`];
+        if (el) { el.focus(); break; }
+      }
+    }
+  }
+
+  function handleKeyDown(r: number, c: number, e: React.KeyboardEvent<HTMLInputElement>) {
+    if (e.key === 'Backspace' && !userGrid[r]?.[c]) {
+      for (let cc = c - 1; cc >= 0; cc--) {
+        const el = inputRefs.current[`${r}-${cc}`];
+        if (el) { el.focus(); break; }
+      }
+    }
+  }
 
   const acrossClues = placements
     .filter(p => p.dir === 'across')
@@ -178,7 +207,7 @@ export default function CrosswordPage() {
   return (
     <div className="p-6 max-w-4xl mx-auto">
       <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
-        <p className="text-gray-500 text-sm">Fill in the grid (typing comes tomorrow)</p>
+        <p className="text-gray-500 text-sm">Fill in the grid</p>
         <div className="flex gap-2">
           <button className="flex items-center gap-1 px-3 py-1.5 border rounded text-sm">
             <Check size={16} /> Check
@@ -205,9 +234,16 @@ export default function CrosswordPage() {
               }
               const num = numbers[r]?.[c];
               return (
-                <div key={`${r}-${c}`} className="relative border border-gray-400 bg-white flex items-center justify-center">
+                <div key={`${r}-${c}`} className="relative border border-gray-400 bg-white">
                   {num && <span className="absolute top-0 left-0.5 text-[9px] text-gray-400">{num}</span>}
-                  <span className="text-sm font-medium uppercase text-gray-300">{letter}</span>
+                  <input
+                    ref={el => { inputRefs.current[`${r}-${c}`] = el; }}
+                    maxLength={1}
+                    value={userGrid[r]?.[c] ?? ''}
+                    onChange={e => handleInput(r, c, e.target.value)}
+                    onKeyDown={e => handleKeyDown(r, c, e)}
+                    className="w-full h-full text-center font-medium uppercase bg-transparent outline-none text-sm"
+                  />
                 </div>
               );
             })
