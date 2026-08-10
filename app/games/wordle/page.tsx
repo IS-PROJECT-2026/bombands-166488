@@ -94,6 +94,7 @@ export default function WordlePage() {
   const [isValidating, setIsValidating] = useState(false)
   const [isLoadingWord, setIsLoadingWord] = useState(false)
   const validatedWordsCache = useRef<Map<string, boolean>>(new Map())
+  const [shakeRow, setShakeRow] = useState(false)
 
   useEffect(() => {
     async function loadTarget() {
@@ -133,6 +134,8 @@ export default function WordlePage() {
     if (status !== 'playing' || isValidating || isLoadingWord) return
     if (currentGuess.length !== WORD_LENGTH) {
       setMessage('Not enough letters')
+      setShakeRow(true)
+      setTimeout(() => setShakeRow(false), 500)
       return
     }
 
@@ -142,6 +145,8 @@ export default function WordlePage() {
 
     if (!valid) {
       setMessage('Not a real word')
+      setShakeRow(true)
+      setTimeout(() => setShakeRow(false), 500)
       return
     }
 
@@ -266,7 +271,9 @@ export default function WordlePage() {
           const evalResult = guess ? evaluateGuess(guess, target) : null
 
           return (
-            <div key={row} className="flex gap-1">
+            <div key={row} 
+            className={`flex gap-1 ${isCurrentRow && shakeRow ? 'shake' : ''}`}
+            >
               {letters.map((letter, col) => (
                 <div
                   key={col}
