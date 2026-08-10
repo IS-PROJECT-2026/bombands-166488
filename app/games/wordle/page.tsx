@@ -103,6 +103,33 @@ function buildShareText(guesses: string[], target: string, mode: string): string
   return `BOMBANDS Wordle (${label}) ${guesses.length}/${MAX_GUESSES}\nPlay NOW: https://is-project-2026.github.io/bombands-166488/games/wordle\n\n${grid}`
 }
 
+const STREAK_KEY = 'bombands_wordle_streak'
+
+type StreakData = { count: number; lastWinDate: string | null }
+
+function getStreak(): StreakData {
+  if (typeof window === 'undefined') return { count: 0, lastWinDate: null }
+  const raw = localStorage.getItem(STREAK_KEY)
+  return raw ? JSON.parse(raw) : { count: 0, lastWinDate: null }
+}
+
+function updateStreak(won: boolean): StreakData {
+  const today = new Date().toDateString()
+  const current = getStreak()
+
+  if (current.lastWinDate === today) return current // already recorded today
+
+  const yesterday = new Date(Date.now() - 86400000).toDateString()
+  const next: StreakData = won
+    ? {
+        count: current.lastWinDate === yesterday ? current.count + 1 : 1,
+        lastWinDate: today,
+      }
+    : { count: 0, lastWinDate: today }
+
+  localStorage.setItem(STREAK_KEY, JSON.stringify(next))
+  return next
+}
 
 export default function WordlePage() {
   const [mode, setMode] = useState<'daily' | 'practice'>('daily')
@@ -241,6 +268,18 @@ async function handleShare() {
     empty: 'bg-transparent border-gray-300',
   }
 
+    const [streak, setStreak] = useState<StreakData>({ count: 0, lastWinDate: null })
+
+    useEffect(() => {
+    setStreak(getStreak())
+    }, [])
+
+    useEffect(() => {
+    if (mode === 'daily' && (status === 'won' || status === 'lost')) {
+        setStreak(updateStreak(status === 'won'))
+    }
+    }, [status, mode])
+
   return (
     <main className="flex flex-col items-center p-6 gap-6">
       <div className="flex gap-2">
@@ -284,9 +323,12 @@ async function handleShare() {
         )}
       </div>
 
-        <p className="text-sm text-gray-400">
+        <div className="text-sm text-gray-400">
+        {mode === 'daily' && (
+          <p className="text-sm text-gray-400">🔥 Streak: {streak.count}</p>
+        )}
           Guess {guesses.length + (status === 'playing' ? 1 : 0)} of {MAX_GUESSES}
-        </p>
+        </div>
 
       <div className="flex flex-col gap-1">
         {Array.from({ length: MAX_GUESSES }).map((_, row) => {
