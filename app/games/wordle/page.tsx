@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 
 const WORD_LENGTH = 5
 const MAX_GUESSES = 6
@@ -71,6 +71,8 @@ export default function WordlePage() {
   const [currentGuess, setCurrentGuess] = useState('')
   const [status, setStatus] = useState<'playing' | 'won' | 'lost'>('playing')
   const [message, setMessage] = useState('')
+  const [isValidating, setIsValidating] = useState(false)
+  const validatedWordsCache = useRef<Map<string, boolean>>(new Map())
 
   useEffect(() => {
     setTarget(mode === 'daily' ? getDailyWord() : getRandomWord())
@@ -80,13 +82,37 @@ export default function WordlePage() {
     setMessage('')
   }, [mode])
 
-  const submitGuess = useCallback(() => {
-    if (status !== 'playing') return
+  async function isRealWord(word: string): Promise<boolean> {
+    const cache = validatedWordsCache.current
+    if (cache.has(word)) return cache.get(word)!
+
+    try {
+      const res = await fetch(`https://api.dictionaryapi.dev/api/v2/entries/en/${word}`)
+      const valid = res.status === 200
+      cache.set(word, valid)
+      return valid
+    } catch {
+      // network failure — fail open so the game stays playable
+      return true
+    }
+  }
+
+  const submitGuess = useCallback(async () => {
+    if (status !== 'playing' || isValidating) return
     if (currentGuess.length !== WORD_LENGTH) {
       setMessage('Not enough letters')
       return
     }
-    
+
+    setIsValidating(true)
+    const valid = await isRealWord(currentGuess)
+    setIsValidating(false)
+
+    if (!valid) {
+      setMessage('Not a real word')
+      return
+    }
+
     const newGuesses = [...guesses, currentGuess]
     setGuesses(newGuesses)
     setCurrentGuess('')
@@ -97,11 +123,11 @@ export default function WordlePage() {
     } else if (newGuesses.length === MAX_GUESSES) {
       setStatus('lost')
     }
-  }, [currentGuess, guesses, target, status])
+  }, [currentGuess, guesses, target, status, isValidating])
 
   const handleKey = useCallback(
     (key: string) => {
-      if (status !== 'playing') return
+      if (status !== 'playing' || isValidating) return
       if (key === 'enter') {
         submitGuess()
       } else if (key === 'backspace') {
@@ -111,7 +137,7 @@ export default function WordlePage() {
         setMessage('')
       }
     },
-    [currentGuess, status, submitGuess]
+    [currentGuess, status, submitGuess, isValidating]
   )
 
   useEffect(() => {
@@ -142,35 +168,35 @@ export default function WordlePage() {
     })
   })
 
-const statusColor: Record<LetterStatus, string> = {
-  correct: 'bg-green-500 text-white border-green-500',
-  present: 'bg-yellow-500 text-white border-yellow-500',
-  absent: 'bg-gray-600 text-white border-gray-600',
-  empty: 'bg-transparent border-gray-300',
-}
+  const statusColor: Record<LetterStatus, string> = {
+    correct: 'bg-green-500 text-white border-green-500',
+    present: 'bg-yellow-500 text-white border-yellow-500',
+    absent: 'bg-gray-600 text-white border-gray-600',
+    empty: 'bg-transparent border-gray-300',
+  }
 
   return (
     <main className="flex flex-col items-center p-6 gap-6">
       <div className="flex gap-2">
         <button
-        onClick={() => { setMode('daily'); setTarget(getDailyWord()) }}
-        className={`px-4 py-2 rounded border ${
+          onClick={() => { setMode('daily'); setTarget(getDailyWord()) }}
+          className={`px-4 py-2 rounded border ${
             mode === 'daily'
-            ? 'bg-white text-black border-white'
-            : 'bg-transparent text-gray-300 border-gray-600'
-        }`}
+              ? 'bg-white text-black border-white'
+              : 'bg-transparent text-gray-300 border-gray-600'
+          }`}
         >
-        Daily
+          Daily
         </button>
         <button
-        onClick={() => { setMode('practice'); setTarget(getRandomWord()) }}
-        className={`px-4 py-2 rounded border ${
+          onClick={() => { setMode('practice'); setTarget(getRandomWord()) }}
+          className={`px-4 py-2 rounded border ${
             mode === 'practice'
-            ? 'bg-white text-black border-white'
-            : 'bg-transparent text-gray-300 border-gray-600'
-        }`}
+              ? 'bg-white text-black border-white'
+              : 'bg-transparent text-gray-300 border-gray-600'
+          }`}
         >
-        Practice
+          Practice
         </button>
         {mode === 'practice' && status !== 'playing' && (
           <button
@@ -210,6 +236,7 @@ const statusColor: Record<LetterStatus, string> = {
         })}
       </div>
 
+      {isValidating && <p className="text-gray-400 text-sm">Checking word...</p>}
       {message && <p className="text-red-500 text-sm">{message}</p>}
       {status === 'won' && <p className="text-green-600 font-bold">You got it! 🎉</p>}
       {status === 'lost' && (
@@ -224,13 +251,13 @@ const statusColor: Record<LetterStatus, string> = {
                 key={key}
                 onClick={() => handleKey(key)}
                 className={`px-2 py-3 rounded text-xs font-semibold uppercase border border-gray-600 ${
-                    key === 'enter' || key === 'backspace'
+                  key === 'enter' || key === 'backspace'
                     ? 'px-3 bg-gray-700 text-white'
                     : keyStatuses[key]
                     ? statusColor[keyStatuses[key]]
                     : 'bg-gray-800 text-white'
                 }`}
-                >
+              >
                 {key === 'backspace' ? '⌫' : key}
               </button>
             ))}
