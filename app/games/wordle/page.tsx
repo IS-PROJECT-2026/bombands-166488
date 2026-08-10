@@ -145,27 +145,35 @@ export default function WordlePage() {
     })
   })
 
-  const statusColor: Record<LetterStatus, string> = {
-    correct: 'bg-green-500 text-white border-green-500',
-    present: 'bg-yellow-500 text-white border-yellow-500',
-    absent: 'bg-gray-500 text-white border-gray-500',
-    empty: 'bg-transparent border-gray-300',
-  }
+const statusColor: Record<LetterStatus, string> = {
+  correct: 'bg-green-500 text-white border-green-500',
+  present: 'bg-yellow-500 text-white border-yellow-500',
+  absent: 'bg-gray-600 text-white border-gray-600',
+  empty: 'bg-transparent border-gray-300',
+}
 
   return (
     <main className="flex flex-col items-center p-6 gap-6">
       <div className="flex gap-2">
         <button
-          onClick={() => setMode('daily')}
-          className={`px-4 py-2 rounded ${mode === 'daily' ? 'bg-black text-white' : 'bg-gray-200'}`}
+        onClick={() => { setMode('daily'); setTarget(getDailyWord()) }}
+        className={`px-4 py-2 rounded border ${
+            mode === 'daily'
+            ? 'bg-white text-black border-white'
+            : 'bg-transparent text-gray-300 border-gray-600'
+        }`}
         >
-          Daily
+        Daily
         </button>
         <button
-          onClick={() => setMode('practice')}
-          className={`px-4 py-2 rounded ${mode === 'practice' ? 'bg-black text-white' : 'bg-gray-200'}`}
+        onClick={() => { setMode('practice'); setTarget(getRandomWord()) }}
+        className={`px-4 py-2 rounded border ${
+            mode === 'practice'
+            ? 'bg-white text-black border-white'
+            : 'bg-transparent text-gray-300 border-gray-600'
+        }`}
         >
-          Practice
+        Practice
         </button>
         {mode === 'practice' && status !== 'playing' && (
           <button
@@ -218,14 +226,14 @@ export default function WordlePage() {
               <button
                 key={key}
                 onClick={() => handleKey(key)}
-                className={`px-2 py-3 rounded text-xs font-semibold uppercase ${
-                  key === 'enter' || key === 'backspace'
-                    ? 'px-3 bg-gray-300'
+                className={`px-2 py-3 rounded text-xs font-semibold uppercase border border-gray-600 ${
+                    key === 'enter' || key === 'backspace'
+                    ? 'px-3 bg-gray-700 text-white'
                     : keyStatuses[key]
                     ? statusColor[keyStatuses[key]]
-                    : 'bg-gray-200'
+                    : 'bg-gray-800 text-white'
                 }`}
-              >
+                >
                 {key === 'backspace' ? '⌫' : key}
               </button>
             ))}
