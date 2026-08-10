@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 
 const WORD_LENGTH = 5
 const MAX_GUESSES = 6
@@ -60,6 +60,56 @@ export default function WordlePage() {
   const [target, setTarget] = useState(getDailyWord())
   const [guesses, setGuesses] = useState<string[]>([])
   const [currentGuess, setCurrentGuess] = useState('')
+  const [status, setStatus] = useState<'playing' | 'won' | 'lost'>('playing')
+const [message, setMessage] = useState('')
+
+const submitGuess = useCallback(() => {
+if (status !== 'playing') return
+if (currentGuess.length !== WORD_LENGTH) {
+    setMessage('Not enough letters')
+    return
+}
+if (!WORDS.includes(currentGuess)) {
+    setMessage('Not in word list')
+    return
+}
+const newGuesses = [...guesses, currentGuess]
+setGuesses(newGuesses)
+setCurrentGuess('')
+setMessage('')
+
+if (currentGuess === target) {
+    setStatus('won')
+} else if (newGuesses.length === MAX_GUESSES) {
+    setStatus('lost')
+}
+}, [currentGuess, guesses, target, status])
+
+const handleKey = useCallback(
+(key: string) => {
+    if (status !== 'playing') return
+    if (key === 'enter') {
+    submitGuess()
+    } else if (key === 'backspace') {
+    setCurrentGuess((g) => g.slice(0, -1))
+    } else if (/^[a-z]$/.test(key) && currentGuess.length < WORD_LENGTH) {
+    setCurrentGuess((g) => g + key)
+    setMessage('')
+    }
+},
+[currentGuess, status, submitGuess]
+)
+
+useEffect(() => {
+const onKeyDown = (e: KeyboardEvent) => {
+    const key = e.key.toLowerCase()
+    if (key === 'enter' || key === 'backspace' || /^[a-z]$/.test(key)) {
+    handleKey(key)
+    }
+}
+window.addEventListener('keydown', onKeyDown)
+return () => window.removeEventListener('keydown', onKeyDown)
+}, [handleKey])
 
   return (
     <main className="flex flex-col items-center p-6 gap-6">
@@ -103,7 +153,9 @@ export default function WordlePage() {
             )
         })}
         </div>
-        
+
+        {message && <p className="text-red-500 text-sm">{message}</p>}
+
     </main>
   )
 }
