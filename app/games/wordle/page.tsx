@@ -132,6 +132,7 @@ function updateStreak(won: boolean): StreakData {
 }
 
 export default function WordlePage() {
+  // ── State ──────────────────────────────────────────────
   const [mode, setMode] = useState<'daily' | 'practice'>('daily')
   const [target, setTarget] = useState('')
   const [guesses, setGuesses] = useState<string[]>([])
@@ -140,8 +141,21 @@ export default function WordlePage() {
   const [message, setMessage] = useState('')
   const [isValidating, setIsValidating] = useState(false)
   const [isLoadingWord, setIsLoadingWord] = useState(false)
-  const validatedWordsCache = useRef<Map<string, boolean>>(new Map())
   const [shakeRow, setShakeRow] = useState(false)
+  const [copied, setCopied] = useState(false)
+  const [streak, setStreak] = useState<StreakData>({ count: 0, lastWinDate: null })
+
+  const validatedWordsCache = useRef<Map<string, boolean>>(new Map())
+  const hiddenInputRef = useRef<HTMLInputElement>(null)
+
+  // ── Effects ────────────────────────────────────────────
+  useEffect(() => {
+    hiddenInputRef.current?.focus()
+  }, [])
+
+  useEffect(() => {
+    setStreak(getStreak())
+  }, [])
 
   useEffect(() => {
     async function loadTarget() {
@@ -162,6 +176,13 @@ export default function WordlePage() {
     loadTarget()
   }, [mode])
 
+  useEffect(() => {
+    if (mode === 'daily' && (status === 'won' || status === 'lost')) {
+      setStreak(updateStreak(status === 'won'))
+    }
+  }, [status, mode])
+
+  // ── Helpers ────────────────────────────────────────────
   async function isRealWord(word: string): Promise<boolean> {
     const cache = validatedWordsCache.current
     if (cache.has(word)) return cache.get(word)!
@@ -177,14 +198,12 @@ export default function WordlePage() {
     }
   }
 
-  const [copied, setCopied] = useState(false)
-
-async function handleShare() {
-  const text = buildShareText(guesses, target, mode)
-  await navigator.clipboard.writeText(text)
-  setCopied(true)
-  setTimeout(() => setCopied(false), 2000)
-}
+  async function handleShare() {
+    const text = buildShareText(guesses, target, mode)
+    await navigator.clipboard.writeText(text)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  }
 
   const submitGuess = useCallback(async () => {
     if (status !== 'playing' || isValidating || isLoadingWord) return
@@ -268,20 +287,26 @@ async function handleShare() {
     empty: 'bg-transparent border-gray-300',
   }
 
-    const [streak, setStreak] = useState<StreakData>({ count: 0, lastWinDate: null })
-
-    useEffect(() => {
-    setStreak(getStreak())
-    }, [])
-
-    useEffect(() => {
-    if (mode === 'daily' && (status === 'won' || status === 'lost')) {
-        setStreak(updateStreak(status === 'won'))
-    }
-    }, [status, mode])
-
+  // ── Render ─────────────────────────────────────────────
   return (
     <main className="flex flex-col items-center p-6 gap-6">
+      <input
+        ref={hiddenInputRef}
+        type="text"
+        autoCapitalize="off"
+        autoCorrect="off"
+        autoComplete="off"
+        className="absolute opacity-0 w-0 h-0"
+        onKeyDown={(e) => {
+          e.preventDefault()
+          e.stopPropagation()
+          const key = e.key.toLowerCase()
+          if (key === 'enter' || key === 'backspace' || /^[a-z]$/.test(key)) {
+            handleKey(key)
+          }
+        }}
+      />
+
       <div className="flex gap-2">
         <button
           onClick={() => setMode('daily')}
@@ -323,14 +348,14 @@ async function handleShare() {
         )}
       </div>
 
-        <div className="text-sm text-gray-400">
-        {mode === 'daily' && (
-          <p className="text-sm text-gray-400">🔥 Streak: {streak.count}</p>
-        )}
+      <div className="flex flex-col items-center gap-1 text-sm text-gray-400">
+        {mode === 'daily' && <p>🔥 Streak: {streak.count}</p>}
+        <p>
           Guess {guesses.length + (status === 'playing' ? 1 : 0)} of {MAX_GUESSES}
-        </div>
+        </p>
+      </div>
 
-      <div className="flex flex-col gap-1">
+      <div onClick={() => hiddenInputRef.current?.focus()} className="flex flex-col gap-1">
         {Array.from({ length: MAX_GUESSES }).map((_, row) => {
           const guess = guesses[row]
           const isCurrentRow = row === guesses.length
@@ -342,8 +367,9 @@ async function handleShare() {
           const evalResult = guess ? evaluateGuess(guess, target) : null
 
           return (
-            <div key={row} 
-            className={`flex gap-1 ${isCurrentRow && shakeRow ? 'shake' : ''}`}
+            <div
+              key={row}
+              className={`flex gap-1 ${isCurrentRow && shakeRow ? 'shake' : ''}`}
             >
               {letters.map((letter, col) => (
                 <div
@@ -370,12 +396,12 @@ async function handleShare() {
 
       {(status === 'won' || status === 'lost') && (
         <button
-            onClick={handleShare}
-            className="px-4 py-2 rounded bg-white text-black font-semibold"
+          onClick={handleShare}
+          className="px-4 py-2 rounded bg-white text-black font-semibold"
         >
-            {copied ? 'Copied!' : 'Share Results'}
+          {copied ? 'Copied!' : 'Share Results'}
         </button>
-        )}
+      )}
 
       <div className="flex flex-col gap-1 mt-4">
         {KEYBOARD_ROWS.map((row, i) => (
