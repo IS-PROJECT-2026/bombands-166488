@@ -86,10 +86,7 @@ export default function WordlePage() {
       setMessage('Not enough letters')
       return
     }
-    if (!WORDS.includes(currentGuess)) {
-      setMessage('Not in word list')
-      return
-    }
+    
     const newGuesses = [...guesses, currentGuess]
     setGuesses(newGuesses)
     setCurrentGuess('')
