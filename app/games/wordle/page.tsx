@@ -250,6 +250,10 @@ export default function WordlePage() {
         )}
       </div>
 
+        <p className="text-sm text-gray-400">
+          Guess {guesses.length + (status === 'playing' ? 1 : 0)} of {MAX_GUESSES}
+        </p>
+
       <div className="flex flex-col gap-1">
         {Array.from({ length: MAX_GUESSES }).map((_, row) => {
           const guess = guesses[row]
