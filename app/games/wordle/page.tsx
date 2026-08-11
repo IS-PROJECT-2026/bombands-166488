@@ -127,6 +127,35 @@ function updateStreak(won: boolean): StreakData {
   return next
 }
 
+const CONFETTI_EMOJIS = ['🎉', '🎊', '✨', '⭐', '🎈']
+
+function ConfettiBurst() {
+  const pieces = Array.from({ length: 250 })
+  return (
+    <div className="pointer-events-none fixed inset-0 overflow-hidden z-50">
+      {pieces.map((_, i) => {
+        const emoji = CONFETTI_EMOJIS[i % CONFETTI_EMOJIS.length]
+        const left = Math.random() * 100
+        const delay = Math.random() * 0.8
+        const duration = 3 + Math.random() * 3 // 3–6 seconds
+        return (
+          <span
+            key={i}
+            className="absolute top-0 text-2xl confetti-piece"
+            style={{
+              left: `${left}%`,
+              animationDelay: `${delay}s`,
+              animationDuration: `${duration}s`,
+            }}
+          >
+            {emoji}
+          </span>
+        )
+      })}
+    </div>
+  )
+}
+
 export default function WordlePage() {
   // ── State ──────────────────────────────────────────────
   const [mode, setMode] = useState<'daily' | 'practice'>('daily')
@@ -140,6 +169,7 @@ export default function WordlePage() {
   const [shakeRow, setShakeRow] = useState(false)
   const [copied, setCopied] = useState(false)
   const [streak, setStreak] = useState<StreakData>({ count: 0, lastWinDate: null })
+  const [showConfetti, setShowConfetti] = useState(false)
 
   const validatedWordsCache = useRef<Map<string, boolean>>(new Map())
   const hiddenInputRef = useRef<HTMLInputElement>(null)
@@ -281,6 +311,14 @@ export default function WordlePage() {
     empty: 'bg-transparent border-gray-300',
   }
 
+    useEffect(() => {
+    if (status === 'won') {
+        setShowConfetti(true)
+        const timer = setTimeout(() => setShowConfetti(false), 8000)
+        return () => clearTimeout(timer)
+    }
+    }, [status])
+
   // ── Render ─────────────────────────────────────────────
   return (
     <main className="flex justify-center p-4 sm:p-6">
@@ -301,6 +339,7 @@ export default function WordlePage() {
             }
           }}
         />
+        {showConfetti && <ConfettiBurst />}  
 
         <h1 className="text-xl font-bold">Wordle</h1>
 
