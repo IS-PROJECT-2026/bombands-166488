@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { RefreshCw, Check, Eye } from 'lucide-react';
 
 type WordEntry = { word: string; clue: string };
 type Placement = WordEntry & { row: number; col: number; dir: 'across' | 'down' };
@@ -210,13 +209,13 @@ export default function CrosswordPage() {
         <p className="text-gray-500 text-sm">Fill in the grid</p>
         <div className="flex gap-2">
           <button className="flex items-center gap-1 px-3 py-1.5 border rounded text-sm">
-            <Check size={16} /> Check
+            ✓ Check
           </button>
           <button className="flex items-center gap-1 px-3 py-1.5 border rounded text-sm">
-            <Eye size={16} /> Reveal
+            👁 Reveal
           </button>
           <button onClick={newPuzzle} className="flex items-center gap-1 px-3 py-1.5 border rounded text-sm">
-            <RefreshCw size={16} /> New puzzle
+            ↻ New puzzle
           </button>
         </div>
       </div>
