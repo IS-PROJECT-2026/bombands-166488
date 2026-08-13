@@ -5,6 +5,7 @@ import Link from 'next/link'
 import Image from 'next/image'
 import { usePathname } from 'next/navigation'
 import ThemeToggle from './ThemeToggle'
+import { basePath } from '@/lib/basePath'
 
 const games = [
   { name: 'Crossword', href: '/games/crossword' },
@@ -23,7 +24,7 @@ export default function Navbar() {
     <nav className="border-b border-gray-200 dark:border-gray-800">
       <div className="flex items-center justify-between px-4 sm:px-6 py-3">
         <Link href="/" className="relative h-10 w-32 sm:h-12 sm:w-40 shrink-0" onClick={() => setMenuOpen(false)}>
-          <Image src="/logo.png" alt="BOMBANDS" fill className="object-contain" priority />
+          <Image src={`${basePath}/logo.png`} alt="BOMBANDS" fill className="object-contain" priority />
         </Link>
 
         {/* Desktop nav */}
