@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import Image from 'next/image'
 import { usePathname } from 'next/navigation'
+import ThemeToggle from './ThemeToggle'
 
 const games = [
   { name: 'Crossword', href: '/games/crossword' },
@@ -43,6 +44,7 @@ export default function Navbar() {
       <div className="flex gap-3">
         <Link href="/login" className="text-sm">Log in</Link>
         <Link href="/signup" className="text-sm">Sign up</Link>
+        <ThemeToggle />
       </div>
     </nav>
   )
