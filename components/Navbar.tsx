@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import Image from 'next/image'
 import { usePathname } from 'next/navigation'
 
 const games = [
@@ -17,7 +18,15 @@ export default function Navbar() {
 
   return (
     <nav className="flex items-center justify-between px-6 py-4 border-b">
-      <Link href="/" className="font-bold text-lg">BOMBANDS</Link>
+      <Link href="/" className="relative h-12 w-40 shrink-0">
+        <Image
+          src="/logo.png"
+          alt="BOMBANDS"
+          fill
+          className="object-contain"
+          priority
+        />
+      </Link>
       <div className="flex gap-4">
         {games.map((game) => (
           <Link
