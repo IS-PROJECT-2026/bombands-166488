@@ -4,10 +4,27 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 
 const MAX_WRONG = 6
 
-const WORDS = [
-  'react', 'server', 'client', 'branch', 'commit', 'github', 'puzzle',
-  'wordle', 'sudoku', 'crossword', 'scrabble', 'javascript', 'component',
-  'render', 'stateful', 'hooks', 'keyboard', 'network', 'deploy', 'streak',
+const WORDS: { word: string; category: string }[] = [
+  { word: 'react', category: 'Tech' },
+  { word: 'server', category: 'Tech' },
+  { word: 'client', category: 'Tech' },
+  { word: 'javascript', category: 'Tech' },
+  { word: 'component', category: 'Tech' },
+  { word: 'render', category: 'Tech' },
+  { word: 'hooks', category: 'Tech' },
+  { word: 'keyboard', category: 'Tech' },
+  { word: 'network', category: 'Tech' },
+  { word: 'deploy', category: 'Tech' },
+  { word: 'branch', category: 'BOMBANDS' },
+  { word: 'commit', category: 'BOMBANDS' },
+  { word: 'github', category: 'BOMBANDS' },
+  { word: 'puzzle', category: 'BOMBANDS' },
+  { word: 'wordle', category: 'BOMBANDS' },
+  { word: 'sudoku', category: 'BOMBANDS' },
+  { word: 'crossword', category: 'BOMBANDS' },
+  { word: 'scrabble', category: 'BOMBANDS' },
+  { word: 'stateful', category: 'Tech' },
+  { word: 'streak', category: 'BOMBANDS' },
 ]
 
 const KEYBOARD_ROWS = [
@@ -16,17 +33,17 @@ const KEYBOARD_ROWS = [
   ['z', 'x', 'c', 'v', 'b', 'n', 'm'],
 ]
 
-function getDailyWord(): string {
+function getDailyEntry() {
   const daysSinceEpoch = Math.floor(Date.now() / 86400000)
   return WORDS[daysSinceEpoch % WORDS.length]
 }
 
-function getRandomWord(exclude?: string): string {
-  let word = WORDS[Math.floor(Math.random() * WORDS.length)]
-  while (word === exclude) {
-    word = WORDS[Math.floor(Math.random() * WORDS.length)]
+function getRandomEntry(exclude?: string) {
+  let entry = WORDS[Math.floor(Math.random() * WORDS.length)]
+  while (entry.word === exclude) {
+    entry = WORDS[Math.floor(Math.random() * WORDS.length)]
   }
-  return word
+  return entry
 }
 
 const STREAK_KEY = 'bombands_hangman_streak'
@@ -105,14 +122,18 @@ function Gallows({ wrongCount, dead }: { wrongCount: number; dead: boolean }) {
 export default function HangmanPage() {
   const [mode, setMode] = useState<'daily' | 'practice'>('daily')
   const [target, setTarget] = useState('')
+  const [category, setCategory] = useState('')
   const [guessedLetters, setGuessedLetters] = useState<Set<string>>(new Set())
+  const [hintsUsed, setHintsUsed] = useState(0)
   const [status, setStatus] = useState<'playing' | 'won' | 'lost'>('playing')
   const [shake, setShake] = useState(false)
   const [copied, setCopied] = useState(false)
   const [streak, setStreak] = useState<StreakData>({ count: 0, lastWinDate: null })
-  const [showConfetti, setShowConfetti] = useState(false)
-  const [showLossBurst, setShowLossBurst] = useState(false)
+  const [confettiId, setConfettiId] = useState<number | null>(null)
+  const [lossId, setLossId] = useState<number | null>(null)
   const hiddenInputRef = useRef<HTMLInputElement>(null)
+  const confettiTimeout = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const lossTimeout = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
     hiddenInputRef.current?.focus()
@@ -123,22 +144,27 @@ export default function HangmanPage() {
   }, [])
 
   useEffect(() => {
-    setTarget(mode === 'daily' ? getDailyWord() : getRandomWord())
+    const entry = mode === 'daily' ? getDailyEntry() : getRandomEntry()
+    setTarget(entry.word)
+    setCategory(entry.category)
     setGuessedLetters(new Set())
+    setHintsUsed(0)
     setStatus('playing')
   }, [mode])
 
   const wrongCount = [...guessedLetters].filter((l) => !target.includes(l)).length
+  const livesUsed = wrongCount + hintsUsed
+  const livesLeft = MAX_WRONG - livesUsed
 
   useEffect(() => {
     if (!target || status !== 'playing') return
     const allRevealed = target.split('').every((l) => guessedLetters.has(l))
     if (allRevealed) {
       setStatus('won')
-    } else if (wrongCount >= MAX_WRONG) {
+    } else if (livesUsed >= MAX_WRONG) {
       setStatus('lost')
     }
-  }, [guessedLetters, target, status, wrongCount])
+  }, [guessedLetters, target, status, livesUsed])
 
   useEffect(() => {
     if (mode === 'daily' && (status === 'won' || status === 'lost')) {
@@ -148,14 +174,18 @@ export default function HangmanPage() {
 
   useEffect(() => {
     if (status === 'won') {
-      setShowConfetti(true)
-      const timer = setTimeout(() => setShowConfetti(false), 8000)
-      return () => clearTimeout(timer)
+      if (confettiTimeout.current) clearTimeout(confettiTimeout.current)
+      setConfettiId(Date.now())
+      confettiTimeout.current = setTimeout(() => setConfettiId(null), 8000)
     }
     if (status === 'lost') {
-      setShowLossBurst(true)
-      const timer = setTimeout(() => setShowLossBurst(false), 8000)
-      return () => clearTimeout(timer)
+      if (lossTimeout.current) clearTimeout(lossTimeout.current)
+      setLossId(Date.now())
+      lossTimeout.current = setTimeout(() => setLossId(null), 8000)
+    }
+    return () => {
+      if (confettiTimeout.current) clearTimeout(confettiTimeout.current)
+      if (lossTimeout.current) clearTimeout(lossTimeout.current)
     }
   }, [status])
 
@@ -173,6 +203,15 @@ export default function HangmanPage() {
     [guessedLetters, target, status]
   )
 
+  function useHint() {
+    if (status !== 'playing' || livesLeft <= 1) return
+    const remaining = target.split('').filter((l) => !guessedLetters.has(l))
+    if (remaining.length === 0) return
+    const letter = remaining[Math.floor(Math.random() * remaining.length)]
+    setGuessedLetters(new Set(guessedLetters).add(letter))
+    setHintsUsed((h) => h + 1)
+  }
+
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       const key = e.key.toLowerCase()
@@ -184,15 +223,18 @@ export default function HangmanPage() {
 
   async function handleShare() {
     const label = mode === 'daily' ? 'Daily' : 'Practice'
-    const text = `BOMBANDS Hangman (${label}) — ${status === 'won' ? `Won with ${MAX_WRONG - wrongCount} lives left! 🎉` : 'Lost this one 💀'}\nPlay: https://is-project-2026.github.io/bombands-166488/games/hangman`
+    const text = `BOMBANDS Hangman (${label}) — ${status === 'won' ? `Won with ${livesLeft} lives left! 🎉` : 'Lost this one 💀'}\nPlay: https://is-project-2026.github.io/bombands-166488/games/hangman`
     await navigator.clipboard.writeText(text)
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
   }
 
+  const dangerRatio = livesUsed / MAX_WRONG
+  const isLong = target.length > 7
+
   return (
     <main className="flex justify-center p-4 sm:p-6">
-      <div className="w-full max-w-md flex flex-col items-center gap-4 sm:gap-6 border border-gray-300 dark:border-gray-700 rounded-xl bg-gray-50 dark:bg-black/40 p-4 sm:p-8 shadow-lg">
+      <div className="w-full max-w-lg flex flex-col items-center gap-4 sm:gap-6 border border-gray-300 dark:border-gray-700 rounded-xl bg-gray-50 dark:bg-black/40 p-4 sm:p-8 shadow-lg">
         <input
           ref={hiddenInputRef}
           type="text"
@@ -207,12 +249,12 @@ export default function HangmanPage() {
             if (/^[a-z]$/.test(key)) guessLetter(key)
           }}
         />
-        {showConfetti && <EmojiBurst emojis={CONFETTI_EMOJIS} />}
-        {showLossBurst && <EmojiBurst emojis={LOSS_EMOJIS} />}
+        {confettiId !== null && <EmojiBurst key={`c-${confettiId}`} emojis={CONFETTI_EMOJIS} />}
+        {lossId !== null && <EmojiBurst key={`l-${lossId}`} emojis={LOSS_EMOJIS} />}
 
         <h1 className="text-xl font-bold text-gray-900 dark:text-white">Hangman</h1>
 
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap justify-center">
           <button
             onClick={() => setMode('daily')}
             className={`px-4 py-2 rounded border transition active:scale-95 hover:brightness-110 ${
@@ -236,8 +278,11 @@ export default function HangmanPage() {
           {mode === 'practice' && status !== 'playing' && (
             <button
               onClick={() => {
-                setTarget(getRandomWord(target))
+                const entry = getRandomEntry(target)
+                setTarget(entry.word)
+                setCategory(entry.category)
                 setGuessedLetters(new Set())
+                setHintsUsed(0)
                 setStatus('playing')
               }}
               className="px-4 py-2 rounded bg-blue-500 text-white transition active:scale-95 hover:brightness-110"
@@ -245,24 +290,36 @@ export default function HangmanPage() {
               New word
             </button>
           )}
+          {status === 'playing' && (
+            <button
+              onClick={useHint}
+              disabled={livesLeft <= 1}
+              className="px-4 py-2 rounded bg-amber-500 text-white transition active:scale-95 hover:brightness-110 disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              💡 Hint
+            </button>
+          )}
         </div>
 
         <div className="flex flex-col items-center gap-1 text-sm text-gray-600 dark:text-gray-400">
           {mode === 'daily' && <p>🔥 Streak: {streak.count}</p>}
-          <p>{MAX_WRONG - wrongCount} lives left</p>
+          <p>Category: {category}</p>
+          <p className={dangerRatio >= 0.8 ? 'text-red-500 font-semibold' : ''}>{livesLeft} lives left</p>
         </div>
 
         <div onClick={() => hiddenInputRef.current?.focus()} className={shake ? 'shake' : ''}>
-          <Gallows wrongCount={wrongCount} dead={status === 'lost'} />
+          <Gallows wrongCount={livesUsed} dead={status === 'lost'} />
         </div>
 
-        <div className="flex gap-1.5 sm:gap-2 flex-wrap justify-center">
+        <div className="flex gap-1 sm:gap-1.5 flex-wrap justify-center max-w-full">
           {target.split('').map((letter, i) => (
             <div
               key={i}
-              className="w-8 h-10 sm:w-9 sm:h-11 flex items-center justify-center border-b-2 border-gray-500 dark:border-gray-400 text-lg sm:text-xl font-bold uppercase text-gray-900 dark:text-white"
+              className={`flex items-center justify-center border-b-2 border-gray-500 dark:border-gray-400 font-bold uppercase text-gray-900 dark:text-white ${
+                isLong ? 'w-6 h-8 text-base' : 'w-8 h-10 sm:w-9 sm:h-11 text-lg sm:text-xl'
+              }`}
             >
-              {guessedLetters.has(letter) || status === 'lost' ? letter : '_'}
+              {guessedLetters.has(letter) || status === 'lost' ? letter : '\u00A0'}
             </div>
           ))}
         </div>
@@ -283,31 +340,39 @@ export default function HangmanPage() {
           </button>
         )}
 
-        <div className="flex flex-col gap-1.5 mt-2 w-full">
-          {KEYBOARD_ROWS.map((row, i) => (
-            <div key={i} className="flex gap-1.5 justify-center">
-              {row.map((key) => {
-                const guessed = guessedLetters.has(key)
-                const correct = guessed && target.includes(key)
-                return (
-                  <button
-                    key={key}
-                    onClick={() => guessLetter(key)}
-                    disabled={guessed || status !== 'playing'}
-                    className={`min-w-[2.25rem] sm:min-w-[2.5rem] px-2 py-3 sm:py-3.5 rounded text-sm font-semibold uppercase border transition active:scale-90 hover:brightness-125 disabled:cursor-not-allowed ${
-                      guessed
-                        ? correct
-                          ? 'bg-green-500 text-white border-green-500'
-                          : 'bg-red-500 text-white border-red-500'
-                        : 'bg-gray-200 dark:bg-gray-800 text-gray-900 dark:text-white border-gray-400 dark:border-gray-600'
-                    }`}
-                  >
-                    {key}
-                  </button>
-                )
-              })}
-            </div>
-          ))}
+        <div className="relative w-full mt-2">
+          {status === 'playing' && dangerRatio >= 0.5 && (
+            <div
+              className="pointer-events-none absolute inset-0 rounded-lg bg-red-500 transition-opacity"
+              style={{ opacity: (dangerRatio - 0.5) * 0.4 }}
+            />
+          )}
+          <div className="relative flex flex-col gap-1.5">
+            {KEYBOARD_ROWS.map((row, i) => (
+              <div key={i} className="flex gap-1.5 justify-center">
+                {row.map((key) => {
+                  const guessed = guessedLetters.has(key)
+                  const correct = guessed && target.includes(key)
+                  return (
+                    <button
+                      key={key}
+                      onClick={() => guessLetter(key)}
+                      disabled={guessed || status !== 'playing'}
+                      className={`min-w-[2.25rem] sm:min-w-[2.5rem] px-2 py-3 sm:py-3.5 rounded text-sm font-semibold uppercase border transition active:scale-90 hover:brightness-125 disabled:cursor-not-allowed ${
+                        guessed
+                          ? correct
+                            ? 'bg-green-500 text-white border-green-500'
+                            : 'bg-red-500 text-white border-red-500'
+                          : 'bg-gray-200 dark:bg-gray-800 text-gray-900 dark:text-white border-gray-400 dark:border-gray-600'
+                      }`}
+                    >
+                      {key}
+                    </button>
+                  )
+                })}
+              </div>
+            ))}
+          </div>
         </div>
       </div>
     </main>
