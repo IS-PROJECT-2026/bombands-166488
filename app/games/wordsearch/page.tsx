@@ -12,28 +12,28 @@ const PUZZLES: Puzzle[] = [
   {
     theme: 'Git Basics',
     grid: [
-      ['K', 'J', 'Q', 'V', 'W', 'L', 'M', 'I'],
-      ['R', 'E', 'A', 'C', 'T', 'N', 'E', 'S'],
-      ['P', 'K', 'J', 'Q', 'V', 'W', 'R', 'S'],
-      ['B', 'R', 'A', 'N', 'C', 'H', 'G', 'U'],
-      ['K', 'J', 'Q', 'V', 'W', 'L', 'E', 'E'],
-      ['R', 'E', 'P', 'O', 'K', 'J', 'Q', 'V'],
-      ['W', 'L', 'N', 'M', 'P', 'K', 'J', 'Q'],
-      ['V', 'W', 'L', 'N', 'M', 'P', 'K', 'J'],
+      ['B', 'R', 'A', 'N', 'C', 'H', 'K', 'R'],
+      ['K', 'J', 'Q', 'V', 'W', 'L', 'X', 'E'],
+      ['K', 'R', 'E', 'A', 'C', 'T', 'Y', 'P'],
+      ['M', 'J', 'Q', 'V', 'W', 'L', 'Z', 'O'],
+      ['K', 'E', 'Q', 'V', 'W', 'L', 'X', 'Y'],
+      ['K', 'L', 'R', 'I', 'S', 'S', 'U', 'E'],
+      ['K', 'J', 'Q', 'G', 'W', 'L', 'X', 'Y'],
+      ['K', 'J', 'Q', 'V', 'E', 'L', 'X', 'Y'],
     ],
     words: ['REACT', 'BRANCH', 'REPO', 'MERGE', 'ISSUE'],
   },
   {
     theme: 'Git Commands',
     grid: [
-      ['K', 'J', 'Q', 'V', 'W', 'L', 'P', 'P'],
-      ['S', 'T', 'A', 'S', 'H', 'N', 'U', 'U'],
-      ['K', 'J', 'Q', 'V', 'W', 'L', 'S', 'L'],
-      ['F', 'E', 'T', 'C', 'H', 'N', 'H', 'L'],
-      ['K', 'J', 'Q', 'V', 'W', 'L', 'M', 'P'],
-      ['C', 'L', 'O', 'N', 'E', 'K', 'J', 'Q'],
-      ['W', 'L', 'N', 'M', 'P', 'K', 'J', 'Q'],
-      ['V', 'W', 'L', 'N', 'M', 'P', 'K', 'J'],
+      ['S', 'T', 'A', 'S', 'H', 'K', 'J', 'C'],
+      ['K', 'J', 'Q', 'V', 'W', 'L', 'Z', 'L'],
+      ['K', 'F', 'E', 'T', 'C', 'H', 'Y', 'O'],
+      ['P', 'J', 'Q', 'V', 'W', 'L', 'Z', 'N'],
+      ['K', 'U', 'Q', 'V', 'W', 'L', 'Z', 'E'],
+      ['K', 'L', 'S', 'V', 'W', 'L', 'Z', 'Y'],
+      ['K', 'J', 'Q', 'H', 'P', 'U', 'L', 'L'],
+      ['K', 'J', 'Q', 'V', 'W', 'L', 'Z', 'Y'],
     ],
     words: ['STASH', 'FETCH', 'CLONE', 'PUSH', 'PULL'],
   },
@@ -255,33 +255,36 @@ export default function WordSearchPage() {
           <p>Theme: {puzzle.theme}</p>
         </div>
 
-        <div className="grid grid-cols-8 gap-1 select-none">
-          {puzzle.grid.map((row, r) =>
-            row.map((letter, c) => {
-              const key = cellKey([r, c])
-              const isFound = foundCells.has(key)
-              const isStart = start && start[0] === r && start[1] === c
-              const isShaking = shakeCell && shakeCell[0] === r && shakeCell[1] === c
-              return (
-                <button
-                  key={key}
-                  onClick={() => handleCellClick([r, c])}
-                  disabled={status !== 'playing'}
-                  className={`w-8 h-8 sm:w-9 sm:h-9 flex items-center justify-center rounded text-xs sm:text-sm font-bold uppercase border transition ${
-                    isShaking ? 'shake' : ''
-                  } ${
-                    isFound
-                      ? 'bg-green-500 text-white border-green-500'
-                      : isStart
-                      ? 'bg-blue-500 text-white border-blue-500'
-                      : 'bg-gray-200 dark:bg-gray-800 text-gray-900 dark:text-white border-gray-400 dark:border-gray-600 hover:brightness-110'
-                  }`}
-                >
-                  {letter}
-                </button>
-              )
-            })
-          )}
+        <div
+            className="grid gap-1 select-none"
+            style={{ gridTemplateColumns: `repeat(${puzzle.grid[0].length}, minmax(0, 1fr))` }}
+            >
+            {puzzle.grid.flatMap((row, r) =>
+                row.map((letter, c) => {
+                const key = cellKey([r, c])
+                const isFound = foundCells.has(key)
+                const isStart = start && start[0] === r && start[1] === c
+                const isShaking = shakeCell && shakeCell[0] === r && shakeCell[1] === c
+                return (
+                    <button
+                    key={key}
+                    onClick={() => handleCellClick([r, c])}
+                    disabled={status !== 'playing'}
+                    className={`w-8 h-8 sm:w-9 sm:h-9 flex items-center justify-center rounded text-xs sm:text-sm font-bold uppercase border transition ${
+                        isShaking ? 'shake' : ''
+                    } ${
+                        isFound
+                        ? 'bg-green-500 text-white border-green-500'
+                        : isStart
+                        ? 'bg-blue-500 text-white border-blue-500'
+                        : 'bg-gray-200 dark:bg-gray-800 text-gray-900 dark:text-white border-gray-400 dark:border-gray-600 hover:brightness-110'
+                    }`}
+                    >
+                    {letter}
+                    </button>
+                )
+                })
+            )}
         </div>
 
         <div className="flex flex-wrap gap-2 justify-center">
