@@ -17,12 +17,18 @@ const games: Game[] = [
     tileColor: 'bg-yellow-400',
     tileImage: '/tiles/crossword.png',
     hoverContent: (
-      <div className="grid grid-cols-3 gap-0.5">
-        {['C', 'A', 'T', '', 'R', '', 'D', 'O', 'G'].map((c, i) => (
+      <div className="grid grid-cols-4 gap-0.5">
+        {[
+          'B', 'O', 'M', 'B',
+          '', '', '', 'A',
+          '', '', '', 'N',
+          '', 'G', 'O', 'D',
+          '', '', '', 'S',
+        ].map((c, i) => (
           <div
             key={i}
             className={`w-5 h-5 flex items-center justify-center text-[10px] font-bold rounded-sm ${
-              c ? 'bg-white text-gray-900' : 'bg-gray-900'
+              c ? 'bg-white text-gray-900' : 'bg-transparent'
             }`}
           >
             {c}
@@ -38,7 +44,7 @@ const games: Game[] = [
     tileImage: '/tiles/wordsearch.png',
     hoverContent: (
       <div className="flex gap-1">
-        {['T', 'R', 'A', 'S'].map((c) => (
+        {['T', 'Y', 'L', 'A'].map((c) => (
           <div
             key={c}
             className="w-5 h-5 flex items-center justify-center text-[10px] font-bold rounded-full bg-white text-gray-900"
@@ -105,7 +111,7 @@ const games: Game[] = [
     href: '/games/hangman',
     tileColor: 'bg-sky-400',
     tileImage: '/tiles/hangman.png',
-    hoverContent: <div className="text-2xl leading-none">🎪🧍</div>,
+    hoverContent: <div className="text-2xl leading-none">🅰️🅱️❓😵🪑</div>,
   },
 ]
 
