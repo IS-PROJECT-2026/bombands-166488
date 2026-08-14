@@ -208,6 +208,14 @@ export default function WordlePage() {
     }
   }, [status, mode])
 
+  useEffect(() => {
+    if (status === 'won') {
+      setShowConfetti(true)
+      const timer = setTimeout(() => setShowConfetti(false), 8000)
+      return () => clearTimeout(timer)
+    }
+  }, [status])
+
   // ── Helpers ────────────────────────────────────────────
   async function isRealWord(word: string): Promise<boolean> {
     const cache = validatedWordsCache.current
@@ -311,18 +319,10 @@ export default function WordlePage() {
     empty: 'bg-transparent border-gray-300',
   }
 
-    useEffect(() => {
-    if (status === 'won') {
-        setShowConfetti(true)
-        const timer = setTimeout(() => setShowConfetti(false), 8000)
-        return () => clearTimeout(timer)
-    }
-    }, [status])
-
   // ── Render ─────────────────────────────────────────────
   return (
     <main className="flex justify-center p-4 sm:p-6">
-      <div className="w-full max-w-md flex flex-col items-center gap-4 sm:gap-6 border border-gray-700 rounded-xl bg-black/40 p-4 sm:p-8 shadow-lg">
+      <div className="w-full max-w-md flex flex-col items-center gap-4 sm:gap-6 border border-gray-200 dark:border-gray-700 rounded-xl bg-gray-50 dark:bg-black/40 p-4 sm:p-8 shadow-lg">
         <input
           ref={hiddenInputRef}
           type="text"
@@ -339,17 +339,17 @@ export default function WordlePage() {
             }
           }}
         />
-        {showConfetti && <ConfettiBurst />}  
+        {showConfetti && <ConfettiBurst />}
 
-        <h1 className="text-xl font-bold">Wordle</h1>
+        <h1 className="text-xl font-bold text-gray-900 dark:text-white">Wordle</h1>
 
         <div className="flex gap-2">
           <button
             onClick={() => setMode('daily')}
             className={`px-4 py-2 rounded border transition active:scale-95 hover:brightness-110 ${
               mode === 'daily'
-                ? 'bg-white text-black border-white'
-                : 'bg-transparent text-gray-300 border-gray-600'
+                ? 'bg-gray-900 text-white border-gray-900 dark:bg-white dark:text-black dark:border-white'
+                : 'bg-transparent text-gray-600 dark:text-gray-300 border-gray-400 dark:border-gray-600'
             }`}
           >
             Daily
@@ -358,8 +358,8 @@ export default function WordlePage() {
             onClick={() => setMode('practice')}
             className={`px-4 py-2 rounded border transition active:scale-95 hover:brightness-110 ${
               mode === 'practice'
-                ? 'bg-white text-black border-white'
-                : 'bg-transparent text-gray-300 border-gray-600'
+                ? 'bg-gray-900 text-white border-gray-900 dark:bg-white dark:text-black dark:border-white'
+                : 'bg-transparent text-gray-600 dark:text-gray-300 border-gray-400 dark:border-gray-600'
             }`}
           >
             Practice
@@ -384,7 +384,7 @@ export default function WordlePage() {
           )}
         </div>
 
-        <div className="flex flex-col items-center gap-1 text-sm text-gray-400">
+        <div className="flex flex-col items-center gap-1 text-sm text-gray-600 dark:text-gray-400">
           {mode === 'daily' && <p>🔥 Streak: {streak.count}</p>}
           <p>
             Guess {guesses.length + (status === 'playing' ? 1 : 0)} of {MAX_GUESSES}
@@ -411,8 +411,8 @@ export default function WordlePage() {
                   <div
                     key={col}
                     style={evalResult ? { animationDelay: `${col * 150}ms` } : undefined}
-                    className={`w-10 h-10 sm:w-12 sm:h-12 flex items-center justify-center border-2 text-lg sm:text-xl font-bold uppercase ${
-                      evalResult ? `${statusColor[evalResult[col]]} tile-flip` : 'border-gray-300'
+                    className={`w-10 h-10 sm:w-12 sm:h-12 flex items-center justify-center border-2 text-lg sm:text-xl font-bold uppercase text-gray-900 dark:text-white ${
+                      evalResult ? `${statusColor[evalResult[col]]} tile-flip` : 'border-gray-400 dark:border-gray-600'
                     }`}
                   >
                     {letter.trim()}
@@ -423,14 +423,14 @@ export default function WordlePage() {
           })}
         </div>
 
-        {isLoadingWord && <p className="text-gray-400 text-sm">Loading new word...</p>}
-        {isValidating && <p className="text-gray-400 text-sm">Checking word...</p>}
+        {isLoadingWord && <p className="text-gray-600 dark:text-gray-400 text-sm">Loading new word...</p>}
+        {isValidating && <p className="text-gray-600 dark:text-gray-400 text-sm">Checking word...</p>}
         {message && <p className="text-red-500 text-sm">{message}</p>}
         {status === 'won' && (
-          <p className="win-pop text-green-600 font-bold text-lg">You got it! 🎉</p>
+          <p className="win-pop text-green-600 dark:text-green-400 font-bold text-lg">You got it! 🎉</p>
         )}
         {status === 'lost' && (
-          <p className="win-pop text-red-600 font-bold">
+          <p className="win-pop text-red-600 dark:text-red-400 font-bold">
             Out of guesses — the word was {target.toUpperCase()}
           </p>
         )}
@@ -438,7 +438,7 @@ export default function WordlePage() {
         {(status === 'won' || status === 'lost') && (
           <button
             onClick={handleShare}
-            className="px-4 py-2 rounded bg-white text-black font-semibold transition active:scale-95 hover:brightness-110"
+            className="px-4 py-2 rounded bg-gray-900 text-white dark:bg-white dark:text-black font-semibold transition active:scale-95 hover:brightness-110"
           >
             {copied ? 'Copied!' : 'Share Results'}
           </button>
@@ -451,12 +451,12 @@ export default function WordlePage() {
                 <button
                   key={key}
                   onClick={() => handleKey(key)}
-                  className={`px-1.5 sm:px-2 py-2.5 sm:py-3 rounded text-[10px] sm:text-xs font-semibold uppercase border border-gray-600 transition active:scale-90 hover:brightness-125 ${
+                  className={`px-1.5 sm:px-2 py-2.5 sm:py-3 rounded text-[10px] sm:text-xs font-semibold uppercase border border-gray-400 dark:border-gray-600 transition active:scale-90 hover:brightness-125 ${
                     key === 'enter' || key === 'backspace'
-                      ? 'px-2.5 sm:px-3 bg-gray-700 text-white'
+                      ? 'px-2.5 sm:px-3 bg-gray-300 text-gray-900 dark:bg-gray-700 dark:text-white'
                       : keyStatuses[key]
                       ? statusColor[keyStatuses[key]]
-                      : 'bg-gray-800 text-white'
+                      : 'bg-gray-200 text-gray-900 dark:bg-gray-800 dark:text-white'
                   }`}
                 >
                   {key === 'backspace' ? '⌫' : key}
