@@ -51,13 +51,14 @@ function updateStreak(won: boolean): StreakData {
 }
 
 const CONFETTI_EMOJIS = ['🎉', '🎊', '✨', '⭐', '🎈']
+const LOSS_EMOJIS = ['💀', '⚰️', '🪦']
 
-function ConfettiBurst() {
+function EmojiBurst({ emojis }: { emojis: string[] }) {
   const pieces = Array.from({ length: 250 })
   return (
     <div className="pointer-events-none fixed inset-0 overflow-hidden z-50">
       {pieces.map((_, i) => {
-        const emoji = CONFETTI_EMOJIS[i % CONFETTI_EMOJIS.length]
+        const emoji = emojis[i % emojis.length]
         const left = Math.random() * 100
         const delay = Math.random() * 0.8
         const duration = 3 + Math.random() * 3
@@ -75,16 +76,23 @@ function ConfettiBurst() {
   )
 }
 
-function Gallows({ wrongCount }: { wrongCount: number }) {
+function Gallows({ wrongCount, dead }: { wrongCount: number; dead: boolean }) {
   return (
-    <svg viewBox="0 0 200 220" className="w-40 h-44 sm:w-48 sm:h-52">
-      {/* base + pole (always visible) */}
-      <line x1="20" y1="210" x2="120" y2="210" stroke="currentColor" strokeWidth="4" />
-      <line x1="50" y1="210" x2="50" y2="20" stroke="currentColor" strokeWidth="4" />
-      <line x1="50" y1="20" x2="140" y2="20" stroke="currentColor" strokeWidth="4" />
-      <line x1="140" y1="20" x2="140" y2="45" stroke="currentColor" strokeWidth="4" />
+    <svg width="160" height="180" viewBox="0 0 200 220">
+      <line x1="20" y1="210" x2="120" y2="210" stroke="#6b7280" strokeWidth="4" />
+      <line x1="50" y1="210" x2="50" y2="20" stroke="#6b7280" strokeWidth="4" />
+      <line x1="50" y1="20" x2="140" y2="20" stroke="#6b7280" strokeWidth="4" />
+      <line x1="140" y1="20" x2="140" y2="45" stroke="#6b7280" strokeWidth="4" />
 
       {wrongCount >= 1 && <circle cx="140" cy="65" r="20" fill="none" stroke="#ef4444" strokeWidth="4" />}
+      {wrongCount >= 1 && dead && (
+        <>
+          <line x1="130" y1="58" x2="138" y2="66" stroke="#ef4444" strokeWidth="2.5" />
+          <line x1="138" y1="58" x2="130" y2="66" stroke="#ef4444" strokeWidth="2.5" />
+          <line x1="142" y1="58" x2="150" y2="66" stroke="#ef4444" strokeWidth="2.5" />
+          <line x1="150" y1="58" x2="142" y2="66" stroke="#ef4444" strokeWidth="2.5" />
+        </>
+      )}
       {wrongCount >= 2 && <line x1="140" y1="85" x2="140" y2="140" stroke="#ef4444" strokeWidth="4" />}
       {wrongCount >= 3 && <line x1="140" y1="100" x2="115" y2="125" stroke="#ef4444" strokeWidth="4" />}
       {wrongCount >= 4 && <line x1="140" y1="100" x2="165" y2="125" stroke="#ef4444" strokeWidth="4" />}
@@ -103,6 +111,7 @@ export default function HangmanPage() {
   const [copied, setCopied] = useState(false)
   const [streak, setStreak] = useState<StreakData>({ count: 0, lastWinDate: null })
   const [showConfetti, setShowConfetti] = useState(false)
+  const [showLossBurst, setShowLossBurst] = useState(false)
   const hiddenInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -141,6 +150,11 @@ export default function HangmanPage() {
     if (status === 'won') {
       setShowConfetti(true)
       const timer = setTimeout(() => setShowConfetti(false), 8000)
+      return () => clearTimeout(timer)
+    }
+    if (status === 'lost') {
+      setShowLossBurst(true)
+      const timer = setTimeout(() => setShowLossBurst(false), 8000)
       return () => clearTimeout(timer)
     }
   }, [status])
@@ -193,7 +207,8 @@ export default function HangmanPage() {
             if (/^[a-z]$/.test(key)) guessLetter(key)
           }}
         />
-        {showConfetti && <ConfettiBurst />}
+        {showConfetti && <EmojiBurst emojis={CONFETTI_EMOJIS} />}
+        {showLossBurst && <EmojiBurst emojis={LOSS_EMOJIS} />}
 
         <h1 className="text-xl font-bold text-gray-900 dark:text-white">Hangman</h1>
 
@@ -237,17 +252,17 @@ export default function HangmanPage() {
           <p>{MAX_WRONG - wrongCount} lives left</p>
         </div>
 
-        <div onClick={() => hiddenInputRef.current?.focus()} className={`text-gray-900 dark:text-white ${shake ? 'shake' : ''}`}>
-          <Gallows wrongCount={wrongCount} />
+        <div onClick={() => hiddenInputRef.current?.focus()} className={shake ? 'shake' : ''}>
+          <Gallows wrongCount={wrongCount} dead={status === 'lost'} />
         </div>
 
         <div className="flex gap-1.5 sm:gap-2 flex-wrap justify-center">
           {target.split('').map((letter, i) => (
             <div
               key={i}
-              className="w-8 h-10 sm:w-9 sm:h-11 flex items-end justify-center border-b-2 border-gray-500 dark:border-gray-500 text-lg sm:text-xl font-bold uppercase text-gray-900 dark:text-white"
+              className="w-8 h-10 sm:w-9 sm:h-11 flex items-center justify-center border-b-2 border-gray-500 dark:border-gray-400 text-lg sm:text-xl font-bold uppercase text-gray-900 dark:text-white"
             >
-              {guessedLetters.has(letter) || status === 'lost' ? letter : ''}
+              {guessedLetters.has(letter) || status === 'lost' ? letter : '_'}
             </div>
           ))}
         </div>
@@ -255,7 +270,7 @@ export default function HangmanPage() {
         {status === 'won' && <p className="win-pop text-green-600 dark:text-green-400 font-bold text-lg">You saved them! 🎉</p>}
         {status === 'lost' && (
           <p className="win-pop text-red-600 dark:text-red-400 font-bold">
-            Out of lives — the word was {target.toUpperCase()}
+            Out of lives — the word was {target.toUpperCase()} 💀
           </p>
         )}
 
@@ -268,9 +283,9 @@ export default function HangmanPage() {
           </button>
         )}
 
-        <div className="flex flex-col gap-1 mt-2 w-full">
+        <div className="flex flex-col gap-1.5 mt-2 w-full">
           {KEYBOARD_ROWS.map((row, i) => (
-            <div key={i} className="flex gap-1 justify-center">
+            <div key={i} className="flex gap-1.5 justify-center">
               {row.map((key) => {
                 const guessed = guessedLetters.has(key)
                 const correct = guessed && target.includes(key)
@@ -279,12 +294,12 @@ export default function HangmanPage() {
                     key={key}
                     onClick={() => guessLetter(key)}
                     disabled={guessed || status !== 'playing'}
-                    className={`px-2 sm:px-2.5 py-2.5 sm:py-3 rounded text-xs font-semibold uppercase border border-gray-400 dark:border-gray-600 transition active:scale-90 hover:brightness-125 disabled:cursor-not-allowed ${
+                    className={`min-w-[2.25rem] sm:min-w-[2.5rem] px-2 py-3 sm:py-3.5 rounded text-sm font-semibold uppercase border transition active:scale-90 hover:brightness-125 disabled:cursor-not-allowed ${
                       guessed
                         ? correct
                           ? 'bg-green-500 text-white border-green-500'
-                          : 'bg-gray-400 dark:bg-gray-700 text-white opacity-50'
-                        : 'bg-gray-200 dark:bg-gray-800 text-gray-900 dark:text-white'
+                          : 'bg-red-500 text-white border-red-500'
+                        : 'bg-gray-200 dark:bg-gray-800 text-gray-900 dark:text-white border-gray-400 dark:border-gray-600'
                     }`}
                   >
                     {key}
