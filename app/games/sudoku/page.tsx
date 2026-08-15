@@ -1,13 +1,15 @@
 'use client'
 
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 
 type Board = (number | null)[][]
 type NotesBoard = Set<number>[][]
 type Difficulty = 'easy' | 'medium' | 'hard' | 'expert'
+type Status = 'playing' | 'won' | 'lost'
 
 const SIZE = 9
 const BOX = 3
+const MAX_MISTAKES = 5
 
 const CLUES: Record<Difficulty, number> = {
   easy: 46,
@@ -137,6 +139,57 @@ function formatTime(seconds: number): string {
   return `${m}:${s.toString().padStart(2, '0')}`
 }
 
+// ---------- Confetti (shared pattern with other games) ----------
+
+const CONFETTI_EMOJIS = ['🎉', '🎊', '✨', '⭐', '🎈']
+const LOSS_EMOJIS = ['💀', '😵', '🔴']
+
+function EmojiBurst({ burstKey, emojis }: { burstKey: number; emojis: string[] }) {
+  const pieces = Array.from({ length: 250 })
+  return (
+    <div key={burstKey} className="pointer-events-none fixed inset-0 overflow-hidden z-50">
+      {pieces.map((_, i) => {
+        const emoji = emojis[i % emojis.length]
+        const left = Math.random() * 100
+        const delay = Math.random() * 0.8
+        const duration = 3 + Math.random() * 3
+        return (
+          <span
+            key={i}
+            className="absolute top-0 text-2xl confetti-piece"
+            style={{ left: `${left}%`, animationDelay: `${delay}s`, animationDuration: `${duration}s` }}
+          >
+            {emoji}
+          </span>
+        )
+      })}
+    </div>
+  )
+}
+
+// ---------- Streak (daily only) ----------
+
+const STREAK_KEY = 'bombands_sudoku_streak'
+type StreakData = { count: number; lastWinDate: string | null }
+
+function getStreak(): StreakData {
+  if (typeof window === 'undefined') return { count: 0, lastWinDate: null }
+  const raw = localStorage.getItem(STREAK_KEY)
+  return raw ? JSON.parse(raw) : { count: 0, lastWinDate: null }
+}
+
+function updateStreak(won: boolean): StreakData {
+  const today = new Date().toDateString()
+  const current = getStreak()
+  if (current.lastWinDate === today) return current
+  const yesterday = new Date(Date.now() - 86400000).toDateString()
+  const next: StreakData = won
+    ? { count: current.lastWinDate === yesterday ? current.count + 1 : 1, lastWinDate: today }
+    : { count: 0, lastWinDate: today }
+  localStorage.setItem(STREAK_KEY, JSON.stringify(next))
+  return next
+}
+
 // ---------- Component ----------
 
 export default function SudokuPage() {
@@ -150,8 +203,18 @@ export default function SudokuPage() {
   const [mistakes, setMistakes] = useState(0)
   const [seconds, setSeconds] = useState(0)
   const [isRunning, setIsRunning] = useState(true)
-  const [isComplete, setIsComplete] = useState(false)
+  const [status, setStatus] = useState<Status>('playing')
   const [invalidCells, setInvalidCells] = useState<Set<string>>(new Set())
+  const [streak, setStreak] = useState<StreakData>({ count: 0, lastWinDate: null })
+  const [confettiKey, setConfettiKey] = useState<number | null>(null)
+  const [lossKey, setLossKey] = useState<number | null>(null)
+  const [copied, setCopied] = useState(false)
+  const confettiTimeout = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const lossTimeout = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  useEffect(() => {
+    setStreak(getStreak())
+  }, [])
 
   const newGame = useCallback((diff: Difficulty) => {
     const { puzzle: p, solution: s } = generatePuzzle(diff)
@@ -164,7 +227,7 @@ export default function SudokuPage() {
     setMistakes(0)
     setSeconds(0)
     setIsRunning(true)
-    setIsComplete(false)
+    setStatus('playing')
     setInvalidCells(new Set())
   }, [])
 
@@ -174,10 +237,29 @@ export default function SudokuPage() {
   }, [])
 
   useEffect(() => {
-    if (!isRunning || isComplete) return
+    if (!isRunning || status !== 'playing') return
     const timer = setInterval(() => setSeconds((s) => s + 1), 1000)
     return () => clearInterval(timer)
-  }, [isRunning, isComplete])
+  }, [isRunning, status])
+
+  useEffect(() => {
+    if (status === 'won') {
+      setStreak(updateStreak(true))
+      if (confettiTimeout.current) clearTimeout(confettiTimeout.current)
+      setConfettiKey(Date.now())
+      confettiTimeout.current = setTimeout(() => setConfettiKey(null), 8000)
+    }
+    if (status === 'lost') {
+      setStreak(updateStreak(false))
+      if (lossTimeout.current) clearTimeout(lossTimeout.current)
+      setLossKey(Date.now())
+      lossTimeout.current = setTimeout(() => setLossKey(null), 8000)
+    }
+    return () => {
+      if (confettiTimeout.current) clearTimeout(confettiTimeout.current)
+      if (lossTimeout.current) clearTimeout(lossTimeout.current)
+    }
+  }, [status])
 
   const checkComplete = useCallback(
     (b: Board) => {
@@ -192,13 +274,14 @@ export default function SudokuPage() {
   )
 
   const handleSelect = (row: number, col: number) => {
+    if (status !== 'playing') return
     setSelected([row, col])
   }
 
   const handleNumberInput = (num: number) => {
-    if (!selected || isComplete) return
+    if (!selected || status !== 'playing') return
     const [row, col] = selected
-    if (puzzle[row][col] !== null) return // can't edit given clues
+    if (puzzle[row][col] !== null) return
 
     if (noteMode) {
       setNotes((prev) => {
@@ -218,7 +301,6 @@ export default function SudokuPage() {
     newBoard[row][col] = num
     setBoard(newBoard)
 
-    // clear notes in this cell when filling a value
     setNotes((prev) => {
       const next = prev.map((r) => r.map((s) => new Set(s)))
       next[row][col].clear()
@@ -238,15 +320,18 @@ export default function SudokuPage() {
     })
 
     if (!correct) {
-      setMistakes((m) => m + 1)
+      const newMistakes = mistakes + 1
+      setMistakes(newMistakes)
+      if (newMistakes >= MAX_MISTAKES) {
+        setStatus('lost')
+      }
     } else if (checkComplete(newBoard)) {
-      setIsComplete(true)
-      setIsRunning(false)
+      setStatus('won')
     }
   }
 
   const handleErase = () => {
-    if (!selected) return
+    if (!selected || status !== 'playing') return
     const [row, col] = selected
     if (puzzle[row][col] !== null) return
 
@@ -268,7 +353,7 @@ export default function SudokuPage() {
   }
 
   const handleHint = () => {
-    if (!selected || isComplete) return
+    if (!selected || status !== 'playing') return
     const [row, col] = selected
     if (puzzle[row][col] !== null) return
 
@@ -289,14 +374,13 @@ export default function SudokuPage() {
     })
 
     if (checkComplete(newBoard)) {
-      setIsComplete(true)
-      setIsRunning(false)
+      setStatus('won')
     }
   }
 
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
-      if (!selected) return
+      if (!selected || status !== 'playing') return
       const [row, col] = selected
       if (e.key >= '1' && e.key <= '9') {
         handleNumberInput(parseInt(e.key, 10))
@@ -315,7 +399,17 @@ export default function SudokuPage() {
     window.addEventListener('keydown', handleKey)
     return () => window.removeEventListener('keydown', handleKey)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selected, board, noteMode, isComplete])
+  }, [selected, board, noteMode, status])
+
+  async function handleShare() {
+    const text =
+      status === 'won'
+        ? `BOMBANDS Sudoku (${difficulty}) — Solved in ${formatTime(seconds)} with ${mistakes} mistake${mistakes === 1 ? '' : 's'}! 🎉\nPlay: https://is-project-2026.github.io/bombands-166488/games/sudoku`
+        : `BOMBANDS Sudoku (${difficulty}) — Ran out of chances at ${MAX_MISTAKES} mistakes 💀\nPlay: https://is-project-2026.github.io/bombands-166488/games/sudoku`
+    await navigator.clipboard.writeText(text)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  }
 
   const selectedValue = selected ? board[selected[0]][selected[1]] : null
 
@@ -332,126 +426,164 @@ export default function SudokuPage() {
   }, [board])
 
   return (
-    <main className="p-4 sm:p-8 max-w-2xl mx-auto">
-      <div className="flex items-center justify-between mb-4">
-        <h1 className="text-2xl font-bold">🔢 Sudoku</h1>
-        <div className="flex items-center gap-3 text-sm">
-          <span className="font-mono">{formatTime(seconds)}</span>
-          <span className="text-red-500">Mistakes: {mistakes}</span>
-        </div>
-      </div>
+    <main className="flex justify-center p-4 sm:p-6">
+      <div className="w-full max-w-2xl flex flex-col items-center gap-4 border border-gray-300 dark:border-gray-700 rounded-xl bg-gray-50 dark:bg-black/40 p-4 sm:p-8 shadow-lg">
+        {confettiKey !== null && <EmojiBurst burstKey={confettiKey} emojis={CONFETTI_EMOJIS} />}
+        {lossKey !== null && <EmojiBurst burstKey={lossKey} emojis={LOSS_EMOJIS} />}
 
-      <div className="flex flex-wrap items-center gap-2 mb-4">
-        {(['easy', 'medium', 'hard', 'expert'] as Difficulty[]).map((d) => (
+        <div className="w-full flex items-center justify-between">
+          <h1 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white">🔢 Sudoku</h1>
+          <div className="flex items-center gap-3 text-sm text-gray-700 dark:text-gray-300">
+            <span className="font-mono">{formatTime(seconds)}</span>
+            <span className={mistakes >= MAX_MISTAKES - 1 ? 'text-red-500 font-semibold' : 'text-red-500'}>
+              Mistakes: {mistakes}/{MAX_MISTAKES}
+            </span>
+          </div>
+        </div>
+
+        <p className="text-sm text-gray-500 dark:text-gray-400">🔥 Daily streak: {streak.count}</p>
+
+        <div className="w-full flex flex-wrap items-center gap-2">
+          {(['easy', 'medium', 'hard', 'expert'] as Difficulty[]).map((d) => (
+            <button
+              key={d}
+              onClick={() => {
+                setDifficulty(d)
+                newGame(d)
+              }}
+              className={`px-3 py-1 rounded-full text-sm capitalize border transition active:scale-95 hover:brightness-110 ${
+                difficulty === d
+                  ? 'bg-blue-600 text-white border-blue-600'
+                  : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700'
+              }`}
+            >
+              {d}
+            </button>
+          ))}
           <button
-            key={d}
-            onClick={() => {
-              setDifficulty(d)
-              newGame(d)
-            }}
-            className={`px-3 py-1 rounded-full text-sm capitalize border transition ${
-              difficulty === d
-                ? 'bg-blue-600 text-white border-blue-600'
-                : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+            onClick={() => newGame(difficulty)}
+            className="ml-auto px-3 py-1 rounded-full text-sm border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white hover:bg-gray-50 dark:hover:bg-gray-800 transition active:scale-95"
+          >
+            New game
+          </button>
+        </div>
+
+        {status === 'won' && (
+          <div className="win-pop w-full p-3 rounded-lg bg-green-100 dark:bg-green-900/40 text-green-800 dark:text-green-300 text-center font-medium">
+            🎉 Solved in {formatTime(seconds)} with {mistakes} mistake{mistakes !== 1 ? 's' : ''}!
+          </div>
+        )}
+        {status === 'lost' && (
+          <div className="win-pop w-full p-3 rounded-lg bg-red-100 dark:bg-red-900/40 text-red-800 dark:text-red-300 text-center font-medium">
+            💀 Out of chances — {MAX_MISTAKES} mistakes reached. The board is locked.
+          </div>
+        )}
+        {(status === 'won' || status === 'lost') && (
+          <button
+            onClick={handleShare}
+            className="px-4 py-2 rounded bg-gray-900 text-white dark:bg-white dark:text-black font-semibold transition active:scale-95 hover:brightness-110"
+          >
+            {copied ? 'Copied!' : 'Share Results'}
+          </button>
+        )}
+
+        <div className="grid grid-cols-9 border-2 border-gray-800 dark:border-gray-300 w-full aspect-square select-none">
+          {board.map((row, r) =>
+            row.map((cell, c) => {
+              const isGiven = puzzle[r][c] !== null
+              const isSelected = selected?.[0] === r && selected?.[1] === c
+              const isSameRowCol = selected && (selected[0] === r || selected[1] === c)
+              const isSameBox =
+                selected &&
+                Math.floor(selected[0] / BOX) === Math.floor(r / BOX) &&
+                Math.floor(selected[1] / BOX) === Math.floor(c / BOX)
+              const isSameValue = selectedValue !== null && cell === selectedValue
+              const isInvalid = invalidCells.has(`${r}-${c}`)
+
+              const borderRight =
+                (c + 1) % BOX === 0 && c !== SIZE - 1
+                  ? 'border-r-2 border-r-gray-800 dark:border-r-gray-300'
+                  : 'border-r border-r-gray-300 dark:border-r-gray-700'
+              const borderBottom =
+                (r + 1) % BOX === 0 && r !== SIZE - 1
+                  ? 'border-b-2 border-b-gray-800 dark:border-b-gray-300'
+                  : 'border-b border-b-gray-300 dark:border-b-gray-700'
+
+              let bg = 'bg-white dark:bg-gray-900'
+              if (isSelected) bg = 'bg-blue-200 dark:bg-blue-900/60'
+              else if (isSameValue) bg = 'bg-blue-100 dark:bg-blue-900/30'
+              else if (isSameRowCol || isSameBox) bg = 'bg-gray-100 dark:bg-gray-800'
+
+              return (
+                <button
+                  key={`${r}-${c}`}
+                  onClick={() => handleSelect(r, c)}
+                  disabled={status !== 'playing'}
+                  className={`relative aspect-square flex items-center justify-center text-lg sm:text-xl font-medium transition-colors ${borderRight} ${borderBottom} ${bg} ${
+                    isGiven
+                      ? 'text-gray-900 dark:text-white font-bold'
+                      : isInvalid
+                      ? 'text-red-600 dark:text-red-400'
+                      : 'text-blue-700 dark:text-blue-300'
+                  }`}
+                >
+                  {cell !== null ? (
+                    cell
+                  ) : notes[r][c].size > 0 ? (
+                    <div className="grid grid-cols-3 gap-0 w-full h-full p-0.5 text-[8px] sm:text-[10px] text-gray-500 dark:text-gray-400 leading-none">
+                      {Array.from({ length: 9 }, (_, i) => i + 1).map((n) => (
+                        <div key={n} className="flex items-center justify-center">
+                          {notes[r][c].has(n) ? n : ''}
+                        </div>
+                      ))}
+                    </div>
+                  ) : null}
+                </button>
+              )
+            })
+          )}
+        </div>
+
+        <div className="flex items-center justify-center gap-2">
+          <button
+            onClick={() => setNoteMode((v) => !v)}
+            disabled={status !== 'playing'}
+            className={`px-3 py-2 rounded-lg text-sm border transition active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed ${
+              noteMode
+                ? 'bg-yellow-400 border-yellow-500 text-black'
+                : 'bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white hover:bg-gray-50 dark:hover:bg-gray-700'
             }`}
           >
-            {d}
+            ✏️ Notes {noteMode ? 'On' : 'Off'}
           </button>
-        ))}
-        <button
-          onClick={() => newGame(difficulty)}
-          className="ml-auto px-3 py-1 rounded-full text-sm border border-gray-300 hover:bg-gray-50"
-        >
-          New game
-        </button>
-      </div>
-
-      {isComplete && (
-        <div className="mb-4 p-3 rounded-lg bg-green-100 text-green-800 text-center font-medium">
-          🎉 Solved in {formatTime(seconds)} with {mistakes} mistake{mistakes !== 1 ? 's' : ''}!
-        </div>
-      )}
-
-      <div className="grid grid-cols-9 border-2 border-gray-800 w-full aspect-square select-none">
-        {board.map((row, r) =>
-          row.map((cell, c) => {
-            const isGiven = puzzle[r][c] !== null
-            const isSelected = selected?.[0] === r && selected?.[1] === c
-            const isSameRowCol = selected && (selected[0] === r || selected[1] === c)
-            const isSameBox =
-              selected &&
-              Math.floor(selected[0] / BOX) === Math.floor(r / BOX) &&
-              Math.floor(selected[1] / BOX) === Math.floor(c / BOX)
-            const isSameValue = selectedValue !== null && cell === selectedValue
-            const isInvalid = invalidCells.has(`${r}-${c}`)
-
-            const borderRight = (c + 1) % BOX === 0 && c !== SIZE - 1 ? 'border-r-2 border-r-gray-800' : 'border-r border-r-gray-300'
-            const borderBottom = (r + 1) % BOX === 0 && r !== SIZE - 1 ? 'border-b-2 border-b-gray-800' : 'border-b border-b-gray-300'
-
-            let bg = 'bg-white'
-            if (isSelected) bg = 'bg-blue-200'
-            else if (isSameValue) bg = 'bg-blue-100'
-            else if (isSameRowCol || isSameBox) bg = 'bg-gray-100'
-
-            return (
-              <button
-                key={`${r}-${c}`}
-                onClick={() => handleSelect(r, c)}
-                className={`relative aspect-square flex items-center justify-center text-lg sm:text-xl font-medium transition-colors ${borderRight} ${borderBottom} ${bg} ${
-                  isGiven ? 'text-gray-900 font-bold' : isInvalid ? 'text-red-600' : 'text-blue-700'
-                }`}
-              >
-                {cell !== null ? (
-                  cell
-                ) : notes[r][c].size > 0 ? (
-                  <div className="grid grid-cols-3 gap-0 w-full h-full p-0.5 text-[8px] sm:text-[10px] text-gray-500 leading-none">
-                    {Array.from({ length: 9 }, (_, i) => i + 1).map((n) => (
-                      <div key={n} className="flex items-center justify-center">
-                        {notes[r][c].has(n) ? n : ''}
-                      </div>
-                    ))}
-                  </div>
-                ) : null}
-              </button>
-            )
-          })
-        )}
-      </div>
-
-      <div className="flex items-center justify-center gap-2 mt-4">
-        <button
-          onClick={() => setNoteMode((v) => !v)}
-          className={`px-3 py-2 rounded-lg text-sm border transition ${
-            noteMode ? 'bg-yellow-400 border-yellow-500 text-black' : 'bg-white border-gray-300 hover:bg-gray-50'
-          }`}
-        >
-          ✏️ Notes {noteMode ? 'On' : 'Off'}
-        </button>
-        <button
-          onClick={handleErase}
-          className="px-3 py-2 rounded-lg text-sm border border-gray-300 hover:bg-gray-50"
-        >
-          ⌫ Erase
-        </button>
-        <button
-          onClick={handleHint}
-          className="px-3 py-2 rounded-lg text-sm border border-gray-300 hover:bg-gray-50"
-        >
-          💡 Hint
-        </button>
-      </div>
-
-      <div className="grid grid-cols-9 gap-1 mt-4">
-        {Array.from({ length: 9 }, (_, i) => i + 1).map((num) => (
           <button
-            key={num}
-            onClick={() => handleNumberInput(num)}
-            disabled={numberCounts[num] >= 9}
-            className="aspect-square rounded-lg border border-gray-300 text-lg font-medium hover:bg-gray-50 disabled:opacity-30 disabled:cursor-not-allowed"
+            onClick={handleErase}
+            disabled={status !== 'playing'}
+            className="px-3 py-2 rounded-lg text-sm border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white hover:bg-gray-50 dark:hover:bg-gray-700 transition active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed"
           >
-            {num}
+            ⌫ Erase
           </button>
-        ))}
+          <button
+            onClick={handleHint}
+            disabled={status !== 'playing'}
+            className="px-3 py-2 rounded-lg text-sm border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white hover:bg-gray-50 dark:hover:bg-gray-700 transition active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            💡 Hint
+          </button>
+        </div>
+
+        <div className="grid grid-cols-9 gap-1 w-full">
+          {Array.from({ length: 9 }, (_, i) => i + 1).map((num) => (
+            <button
+              key={num}
+              onClick={() => handleNumberInput(num)}
+              disabled={numberCounts[num] >= 9 || status !== 'playing'}
+              className="aspect-square rounded-lg border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white text-lg font-medium hover:bg-gray-50 dark:hover:bg-gray-800 transition active:scale-90 disabled:opacity-30 disabled:cursor-not-allowed"
+            >
+              {num}
+            </button>
+          ))}
+        </div>
       </div>
     </main>
   )
