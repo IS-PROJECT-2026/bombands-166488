@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 
 const BOARD_SIZE = 11
 const RACK_SIZE = 7
+const CENTER = Math.floor(BOARD_SIZE / 2)
 
 const LETTER_VALUES: Record<string, number> = {
   a: 1, b: 3, c: 3, d: 2, e: 1, f: 4, g: 2, h: 4, i: 1, j: 8, k: 5,
@@ -24,7 +25,7 @@ const LETTER_POOL: string[] = (() => {
   return pool
 })()
 
-function drawTiles(count: number, exclude: string[] = []): string[] {
+function drawTiles(count: number): string[] {
   const available = [...LETTER_POOL]
   const drawn: string[] = []
   for (let i = 0; i < count; i++) {
@@ -35,10 +36,37 @@ function drawTiles(count: number, exclude: string[] = []): string[] {
   return drawn
 }
 
+function shuffleArray<T>(arr: T[]): T[] {
+  const a = [...arr]
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1))
+    ;[a[i], a[j]] = [a[j], a[i]]
+  }
+  return a
+}
+
 type PlacedTile = { row: number; col: number; letter: string; rackIndex: number }
 type Cell = [number, number]
+type BonusType = 'TW' | 'DW' | 'TL' | 'DL'
 
-const CENTER = Math.floor(BOARD_SIZE / 2)
+const BONUS: Record<string, BonusType> = {}
+;[[0, 0], [0, 10], [10, 0], [10, 10]].forEach(([r, c]) => (BONUS[`${r}-${c}`] = 'TW'))
+;[
+  [1, 1], [2, 2], [3, 3], [4, 4], [6, 6], [7, 7], [8, 8], [9, 9],
+  [1, 9], [2, 8], [3, 7], [4, 6], [6, 4], [7, 3], [8, 2], [9, 1],
+  [5, 5],
+].forEach(([r, c]) => (BONUS[`${r}-${c}`] = 'DW'))
+;[[0, 5], [5, 0], [5, 10], [10, 5]].forEach(([r, c]) => (BONUS[`${r}-${c}`] = 'TL'))
+;[[2, 6], [6, 2], [2, 4], [4, 2], [6, 8], [8, 6], [4, 8], [8, 4]].forEach(
+  ([r, c]) => (BONUS[`${r}-${c}`] = 'DL')
+)
+
+const BONUS_STYLES: Record<BonusType, string> = {
+  TW: 'bg-red-200 dark:bg-red-900/40 text-red-700 dark:text-red-400',
+  DW: 'bg-pink-200 dark:bg-pink-900/40 text-pink-700 dark:text-pink-400',
+  TL: 'bg-blue-200 dark:bg-blue-900/40 text-blue-700 dark:text-blue-400',
+  DL: 'bg-sky-100 dark:bg-sky-900/30 text-sky-700 dark:text-sky-400',
+}
 
 const CONFETTI_EMOJIS = ['🎉', '🎊', '✨', '⭐', '🎈']
 
@@ -73,8 +101,7 @@ function getBestScore(): number {
 }
 
 function maybeUpdateBestScore(score: number): number {
-  const current = getBestScore()
-  const best = Math.max(current, score)
+  const best = Math.max(getBestScore(), score)
   localStorage.setItem(BEST_SCORE_KEY, best.toString())
   return best
 }
@@ -100,6 +127,8 @@ export default function ScrabblePage() {
     setRack(drawTiles(RACK_SIZE))
     setBestScore(getBestScore())
   }, [])
+
+  const usedRackIndices = new Set(pendingTiles.map((t) => t.rackIndex))
 
   const placeTile = useCallback(
     (row: number, col: number) => {
@@ -133,20 +162,34 @@ export default function ScrabblePage() {
     setMessage('')
   }
 
-  function getPendingWordCells(): Cell[] | null {
+  function shuffleRack() {
+    if (pendingTiles.length > 0) return
+    setRack((prev) => shuffleArray(prev))
+  }
+
+  function computeWordCells(): Cell[] | null {
     if (pendingTiles.length === 0) return null
 
     const rows = new Set(pendingTiles.map((t) => t.row))
     const cols = new Set(pendingTiles.map((t) => t.col))
-    const horizontal = rows.size === 1
-    const vertical = cols.size === 1
-    if (!horizontal && !vertical) return null
 
-    if (horizontal) {
-      const row = [...rows][0]
-      const colsSorted = [...cols].sort((a, b) => a - b)
-      const minCol = colsSorted[0]
-      const maxCol = colsSorted[colsSorted.length - 1]
+    let direction: 'h' | 'v'
+    if (pendingTiles.length > 1) {
+      if (rows.size === 1) direction = 'h'
+      else if (cols.size === 1) direction = 'v'
+      else return null
+    } else {
+      const t = pendingTiles[0]
+      const hasHorizNeighbor = board[t.row][t.col - 1] || board[t.row][t.col + 1]
+      direction = hasHorizNeighbor ? 'h' : 'v'
+    }
+
+    if (direction === 'h') {
+      const row = pendingTiles[0].row
+      let minCol = Math.min(...pendingTiles.map((t) => t.col))
+      let maxCol = Math.max(...pendingTiles.map((t) => t.col))
+      while (minCol > 0 && board[row][minCol - 1]) minCol--
+      while (maxCol < BOARD_SIZE - 1 && board[row][maxCol + 1]) maxCol++
       const cells: Cell[] = []
       for (let c = minCol; c <= maxCol; c++) {
         if (!board[row][c]) return null
@@ -154,10 +197,11 @@ export default function ScrabblePage() {
       }
       return cells
     } else {
-      const col = [...cols][0]
-      const rowsSorted = [...rows].sort((a, b) => a - b)
-      const minRow = rowsSorted[0]
-      const maxRow = rowsSorted[rowsSorted.length - 1]
+      const col = pendingTiles[0].col
+      let minRow = Math.min(...pendingTiles.map((t) => t.row))
+      let maxRow = Math.max(...pendingTiles.map((t) => t.row))
+      while (minRow > 0 && board[minRow - 1][col]) minRow--
+      while (maxRow < BOARD_SIZE - 1 && board[maxRow + 1][col]) maxRow++
       const cells: Cell[] = []
       for (let r = minRow; r <= maxRow; r++) {
         if (!board[r][col]) return null
@@ -186,7 +230,7 @@ export default function ScrabblePage() {
       return
     }
 
-    const cells = getPendingWordCells()
+    const cells = computeWordCells()
     if (!cells) {
       setMessage('Tiles must form a single straight line, no gaps')
       return
@@ -207,24 +251,35 @@ export default function ScrabblePage() {
       return
     }
 
-    const points = cells.reduce((sum, [r, c]) => sum + LETTER_VALUES[board[r][c]!.letter], 0)
-    const bonus = cells.length >= 6 ? 15 : 0 // small bonus for long words, like a real bingo bonus
+    let letterSum = 0
+    let wordMultiplier = 1
+    cells.forEach(([r, c]) => {
+      const tile = board[r][c]!
+      let val = LETTER_VALUES[tile.letter]
+      const isPending = pendingTiles.some((p) => p.row === r && p.col === c)
+      const bonus = BONUS[`${r}-${c}`]
+      if (isPending && bonus) {
+        if (bonus === 'DL') val *= 2
+        if (bonus === 'TL') val *= 3
+        if (bonus === 'DW') wordMultiplier *= 2
+        if (bonus === 'TW') wordMultiplier *= 3
+      }
+      letterSum += val
+    })
+    const roundScore = letterSum * wordMultiplier
 
-    const roundScore = points + bonus
     const newTotal = totalScore + roundScore
     setTotalScore(newTotal)
     setLastWord({ word: word.toUpperCase(), points: roundScore })
 
-    const usedIndices = new Set(pendingTiles.map((t) => t.rackIndex))
-    const remaining = rack.filter((_, i) => !usedIndices.has(i))
+    const remaining = rack.filter((_, i) => !usedRackIndices.has(i))
     const newTiles = drawTiles(pendingTiles.length)
     setRack([...remaining, ...newTiles])
 
     setPendingTiles([])
     setMessage('')
 
-    const best = maybeUpdateBestScore(newTotal)
-    setBestScore(best)
+    setBestScore(maybeUpdateBestScore(newTotal))
 
     if (confettiTimeout.current) clearTimeout(confettiTimeout.current)
     setConfettiKey(Date.now())
@@ -279,6 +334,7 @@ export default function ScrabblePage() {
             row.map((tile, c) => {
               const isCenter = r === CENTER && c === CENTER
               const isPending = pendingTiles.some((t) => t.row === r && t.col === c)
+              const bonus = BONUS[`${r}-${c}`]
               return (
                 <button
                   key={`${r}-${c}`}
@@ -289,6 +345,8 @@ export default function ScrabblePage() {
                       ? isPending
                         ? 'bg-amber-400 border-amber-500 text-amber-950'
                         : 'bg-amber-100 dark:bg-amber-900/60 border-amber-300 dark:border-amber-700 text-amber-900 dark:text-amber-200'
+                      : bonus
+                      ? `${BONUS_STYLES[bonus]} border-gray-300 dark:border-gray-700 hover:brightness-95`
                       : isCenter
                       ? 'bg-blue-100 dark:bg-blue-900/40 border-gray-300 dark:border-gray-700 hover:brightness-110'
                       : 'bg-white dark:bg-gray-900 border-gray-300 dark:border-gray-700 hover:brightness-95 dark:hover:brightness-125'
@@ -303,6 +361,8 @@ export default function ScrabblePage() {
                     </>
                   ) : isCenter ? (
                     '★'
+                  ) : bonus ? (
+                    <span className="text-[7px] sm:text-[8px]">{bonus}</span>
                   ) : (
                     ''
                   )}
@@ -315,7 +375,7 @@ export default function ScrabblePage() {
         {message && <p className="text-red-500 text-sm">{message}</p>}
         {isValidating && <p className="text-gray-500 dark:text-gray-400 text-sm">Checking word...</p>}
 
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap justify-center">
           <button
             onClick={submitWord}
             disabled={pendingTiles.length === 0 || isValidating}
@@ -331,6 +391,14 @@ export default function ScrabblePage() {
             Recall tiles
           </button>
           <button
+            onClick={shuffleRack}
+            disabled={pendingTiles.length > 0}
+            title={pendingTiles.length > 0 ? 'Recall placed tiles first' : 'Shuffle rack'}
+            className="px-4 py-2 rounded bg-purple-500 text-white font-semibold transition active:scale-95 hover:brightness-110 disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            🔀 Shuffle
+          </button>
+          <button
             onClick={handleShare}
             className="px-4 py-2 rounded bg-gray-900 text-white dark:bg-white dark:text-black font-semibold transition active:scale-95 hover:brightness-110"
           >
@@ -339,25 +407,31 @@ export default function ScrabblePage() {
         </div>
 
         <div className="flex gap-1.5 flex-wrap justify-center mt-2">
-          {rack.map((letter, i) => (
-            <button
-              key={i}
-              onClick={() => setSelectedRackIndex(selectedRackIndex === i ? null : i)}
-              className={`relative w-10 h-10 sm:w-12 sm:h-12 flex items-center justify-center rounded-lg text-lg sm:text-xl font-bold uppercase border-2 shadow-md transition active:scale-90 ${
-                selectedRackIndex === i
-                  ? 'bg-blue-400 border-blue-600 text-white scale-110'
-                  : 'bg-amber-100 dark:bg-amber-900/70 border-amber-400 dark:border-amber-700 text-amber-900 dark:text-amber-200 hover:brightness-105'
-              }`}
-            >
-              {letter}
-              <span className="absolute bottom-0.5 right-1 text-[9px] font-normal">
-                {LETTER_VALUES[letter]}
-              </span>
-            </button>
-          ))}
+          {rack.map((letter, i) => {
+            const isUsed = usedRackIndices.has(i)
+            return (
+              <button
+                key={i}
+                onClick={() => !isUsed && setSelectedRackIndex(selectedRackIndex === i ? null : i)}
+                disabled={isUsed}
+                className={`relative w-10 h-10 sm:w-12 sm:h-12 flex items-center justify-center rounded-lg text-lg sm:text-xl font-bold uppercase border-2 shadow-md transition active:scale-90 ${
+                  isUsed
+                    ? 'bg-gray-200 dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-gray-400 dark:text-gray-600 opacity-40 cursor-not-allowed'
+                    : selectedRackIndex === i
+                    ? 'bg-blue-400 border-blue-600 text-white scale-110'
+                    : 'bg-amber-100 dark:bg-amber-900/70 border-amber-400 dark:border-amber-700 text-amber-900 dark:text-amber-200 hover:brightness-105'
+                }`}
+              >
+                {letter}
+                <span className="absolute bottom-0.5 right-1 text-[9px] font-normal">
+                  {LETTER_VALUES[letter]}
+                </span>
+              </button>
+            )
+          })}
         </div>
         <p className="text-xs text-gray-400 dark:text-gray-600">
-          Tap a tile, then tap a board square. Place letters in one straight line, then submit.
+          Tap a tile, then tap a board square. Place letters in one straight line, then submit — words can connect to existing tiles.
         </p>
       </div>
     </main>
