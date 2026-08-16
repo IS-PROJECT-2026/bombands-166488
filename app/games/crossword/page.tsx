@@ -19,28 +19,27 @@ type CrosswordPuzzle = {
   clues: Clue[]
 }
 
-// '#' marks a blocked cell; everything else is buildable from the clues below
 const PUZZLES: CrosswordPuzzle[] = [
   {
     theme: 'Git Basics',
-    size: 7,
+    size: 9,
     clues: [
       { number: 1, direction: 'across', row: 0, col: 0, answer: 'BRANCH', clue: 'A separate line of development in Git' },
-      { number: 2, direction: 'down', row: 0, col: 2, answer: 'ISSUE', clue: 'A tracked task or bug on GitHub' },
-      { number: 3, direction: 'across', row: 2, col: 0, answer: 'MERGE', clue: 'Combining two branches into one' },
-      { number: 4, direction: 'down', row: 0, col: 5, answer: 'COMMIT', clue: 'A saved snapshot of changes' },
-      { number: 5, direction: 'across', row: 4, col: 1, answer: 'REPO', clue: 'Short for repository' },
+      { number: 2, direction: 'down', row: 0, col: 4, answer: 'COMMIT', clue: 'A saved snapshot of changes' },
+      { number: 3, direction: 'across', row: 1, col: 1, answer: 'REPO', clue: 'Short for repository' },
+      { number: 4, direction: 'across', row: 2, col: 4, answer: 'MERGE', clue: 'Combining two branches into one' },
+      { number: 5, direction: 'across', row: 4, col: 4, answer: 'ISSUE', clue: 'A tracked task or bug on GitHub' },
     ],
   },
   {
     theme: 'GitHub Workflow',
-    size: 7,
+    size: 11,
     clues: [
-      { number: 1, direction: 'across', row: 0, col: 0, answer: 'CLONE', clue: 'Copy a repo to your local machine' },
-      { number: 2, direction: 'down', row: 0, col: 1, answer: 'LABEL', clue: 'A colored tag on an issue or PR' },
-      { number: 3, direction: 'across', row: 2, col: 0, answer: 'DEPLOY', clue: 'Publish your app to a live server' },
-      { number: 4, direction: 'down', row: 0, col: 4, answer: 'STASH', clue: 'Temporarily shelve uncommitted changes' },
-      { number: 5, direction: 'across', row: 4, col: 1, answer: 'FETCH', clue: 'Download changes without merging them' },
+      { number: 1, direction: 'down', row: 0, col: 2, answer: 'DEPLOY', clue: 'Publish your app to a live server' },
+      { number: 2, direction: 'across', row: 4, col: 0, answer: 'CLONE', clue: 'Copy a repo to your local machine' },
+      { number: 3, direction: 'down', row: 4, col: 1, answer: 'LABEL', clue: 'A colored tag on an issue or PR' },
+      { number: 4, direction: 'down', row: 6, col: 2, answer: 'STASH', clue: 'Temporarily shelve uncommitted changes' },
+      { number: 5, direction: 'across', row: 7, col: 0, answer: 'FETCH', clue: 'Download changes without merging them' },
     ],
   },
 ]
@@ -154,6 +153,8 @@ function maybeUpdateBestTime(theme: string, seconds: number): number {
   return best
 }
 
+const MAX_HINTS = 3
+
 export default function CrosswordPage() {
   const [mode, setMode] = useState<'daily' | 'practice'>('daily')
   const [puzzle, setPuzzle] = useState<CrosswordPuzzle>(PUZZLES[0])
@@ -162,6 +163,7 @@ export default function CrosswordPage() {
   const [selected, setSelected] = useState<[number, number] | null>(null)
   const [direction, setDirection] = useState<ClueDirection>('across')
   const [status, setStatus] = useState<'playing' | 'won'>('playing')
+  const [hintsUsed, setHintsUsed] = useState(0)
   const [streak, setStreak] = useState<StreakData>({ count: 0, lastWinDate: null })
   const [confettiKey, setConfettiKey] = useState<number | null>(null)
   const [elapsed, setElapsed] = useState(0)
@@ -182,6 +184,7 @@ export default function CrosswordPage() {
     setSelected(null)
     setDirection('across')
     setStatus('playing')
+    setHintsUsed(0)
     setElapsed(0)
   }, [])
 
@@ -229,12 +232,27 @@ export default function CrosswordPage() {
     }
   }
 
+  function directionsAt(cell: CellInfo) {
+    return {
+      across: cell.clueRefs.some((r) => r.direction === 'across'),
+      down: cell.clueRefs.some((r) => r.direction === 'down'),
+    }
+  }
+
   function handleCellClick(row: number, col: number) {
-    if (!gridInfo[row][col] || status !== 'playing') return
-    if (selected && selected[0] === row && selected[1] === col) {
+    const cell = gridInfo[row][col]
+    if (!cell || status !== 'playing') return
+    const dirs = directionsAt(cell)
+
+    if (selected && selected[0] === row && selected[1] === col && dirs.across && dirs.down) {
       setDirection((d) => (d === 'across' ? 'down' : 'across'))
-    } else {
-      setSelected([row, col])
+      return
+    }
+
+    setSelected([row, col])
+    const currentStillValid = (direction === 'across' && dirs.across) || (direction === 'down' && dirs.down)
+    if (!currentStillValid) {
+      setDirection(dirs.across ? 'across' : 'down')
     }
   }
 
@@ -263,6 +281,31 @@ export default function CrosswordPage() {
       const prevCell = findNextCell(r, c, direction, true)
       if (prevCell) setSelected(prevCell)
     }
+  }
+
+  function useHint() {
+    if (status !== 'playing' || hintsUsed >= MAX_HINTS) return
+    let target = selected
+    if (!target || !gridInfo[target[0]][target[1]] || entries[target[0]][target[1]]) {
+      outer: for (let r = 0; r < puzzle.size; r++) {
+        for (let c = 0; c < puzzle.size; c++) {
+          if (gridInfo[r][c] && !entries[r][c]) {
+            target = [r, c]
+            break outer
+          }
+        }
+      }
+    }
+    if (!target) return
+    const [r, c] = target
+    const cell = gridInfo[r][c]
+    if (!cell) return
+    setEntries((prev) => {
+      const next = prev.map((row) => [...row])
+      next[r][c] = cell.correctLetter
+      return next
+    })
+    setHintsUsed((h) => h + 1)
   }
 
   useEffect(() => {
@@ -344,6 +387,15 @@ export default function CrosswordPage() {
               New puzzle
             </button>
           )}
+          {status === 'playing' && (
+            <button
+              onClick={useHint}
+              disabled={hintsUsed >= MAX_HINTS}
+              className="px-4 py-2 rounded bg-amber-500 text-white transition active:scale-95 hover:brightness-110 disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              💡 Hint ({MAX_HINTS - hintsUsed})
+            </button>
+          )}
         </div>
 
         <div className="flex flex-col items-center gap-1 text-sm text-gray-600 dark:text-gray-400">
@@ -369,16 +421,10 @@ export default function CrosswordPage() {
             row.map((cell, c) => {
               const isSelected = selected && selected[0] === r && selected[1] === c
               const isInActiveClue =
-                selected &&
                 cell &&
-                gridInfo[selected[0]][selected[1]]?.clueRefs.some(
-                  (ref) =>
-                    ref.direction === direction &&
-                    activeClue &&
-                    ref.clueNumber === activeClue.number
-                ) &&
+                activeClue &&
                 cell.clueRefs.some(
-                  (ref) => ref.direction === direction && activeClue && ref.clueNumber === activeClue.number
+                  (ref) => ref.direction === direction && ref.clueNumber === activeClue.number
                 )
               const isFilled = cell && entries[r][c] !== ''
               const isCorrect = cell && entries[r][c].toLowerCase() === cell.correctLetter
