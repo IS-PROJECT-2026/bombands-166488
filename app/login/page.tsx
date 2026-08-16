@@ -1,29 +1,49 @@
 'use client'
 
 import { useState } from 'react'
+import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabaseClient'
-import { useRouter } from 'next/navigation'
 
 export default function LoginPage() {
+  const router = useRouter()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const router = useRouter()
+  const [error, setError] = useState('')
+  const [loading, setLoading] = useState(false)
 
-async function handleSubmit(e: React.FormEvent) {
+  function validate(): string | null {
+    if (!email.trim()) return 'Email is required'
+    if (!password) return 'Password is required'
+    return null
+  }
+
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    const { error } = await supabase.auth.signInWithPassword({ email, password })
-    if (error) {
-        console.error(error.message)
-        return
+    const validationError = validate()
+    if (validationError) {
+      setError(validationError)
+      return
     }
+
+    setLoading(true)
+    setError('')
+    const { error: loginError } = await supabase.auth.signInWithPassword({ email, password })
+    setLoading(false)
+
+    if (loginError) {
+      setError('Incorrect email or password')
+      return
+    }
+
     router.push('/')
-}
+  }
 
   return (
     <main className="flex justify-center p-6">
       <div className="w-full max-w-sm flex flex-col gap-4 border border-gray-300 dark:border-gray-700 rounded-xl bg-gray-50 dark:bg-black/40 p-6 sm:p-8 shadow-lg">
         <h1 className="text-xl font-bold text-gray-900 dark:text-white text-center">Log in</h1>
+
         <form onSubmit={handleSubmit} className="flex flex-col gap-3">
           <input
             type="email"
@@ -39,16 +59,23 @@ async function handleSubmit(e: React.FormEvent) {
             onChange={(e) => setPassword(e.target.value)}
             className="px-3 py-2 rounded border border-gray-400 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-white"
           />
+
+          {error && <p className="text-red-500 text-sm">{error}</p>}
+
           <button
             type="submit"
-            className="px-4 py-2 rounded bg-gray-900 text-white dark:bg-white dark:text-black font-semibold transition active:scale-95 hover:brightness-110"
+            disabled={loading}
+            className="px-4 py-2 rounded bg-gray-900 text-white dark:bg-white dark:text-black font-semibold transition active:scale-95 hover:brightness-110 disabled:opacity-50"
           >
-            Log in
+            {loading ? 'Logging in...' : 'Log in'}
           </button>
         </form>
+
         <p className="text-sm text-center text-gray-600 dark:text-gray-400">
           Don't have an account?{' '}
-          <Link href="/signup" className="text-blue-600 dark:text-blue-400 hover:underline">Sign up</Link>
+          <Link href="/signup" className="text-blue-600 dark:text-blue-400 hover:underline">
+            Sign up
+          </Link>
         </p>
       </div>
     </main>
