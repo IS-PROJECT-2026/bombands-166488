@@ -4,25 +4,43 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 
 type WordEntry = { word: string; clue: string }
 type Placement = WordEntry & { row: number; col: number; dir: 'across' | 'down' }
+type Direction = 'across' | 'down'
 
-const WORD_BANK: WordEntry[] = [
-  { word: 'REACT', clue: 'JS library for building UIs' },
-  { word: 'GITHUB', clue: 'Where BOMBANDS lives' },
-  { word: 'SUPABASE', clue: 'Backend used for auth here' },
-  { word: 'COMMIT', clue: 'A saved snapshot in git' },
-  { word: 'BRANCH', clue: 'Isolated line of development in git' },
-  { word: 'MERGE', clue: 'Combining two branches' },
-  { word: 'SUDOKU', clue: 'Number puzzle, also a BOMBANDS game' },
-  { word: 'WORDLE', clue: 'Guess the five letter word game' },
-  { word: 'HANGMAN', clue: 'Guess letters before the drawing completes' },
-  { word: 'SCRABBLE', clue: 'Tile based word game' },
-  { word: 'DEBUG', clue: 'Find and fix errors in code' },
-  { word: 'ARRAY', clue: 'Ordered collection data structure' },
-  { word: 'VERCEL', clue: 'Where the Next.js app deploys' },
-  { word: 'DEPLOY', clue: 'Publish your app to a live server' },
-  { word: 'FETCH', clue: 'Download changes without merging' },
-]
+const CATEGORIES: Record<string, WordEntry[]> = {
+  'Git & GitHub': [
+    { word: 'BRANCH', clue: 'Isolated line of development in git' },
+    { word: 'COMMIT', clue: 'A saved snapshot in git' },
+    { word: 'MERGE', clue: 'Combining two branches' },
+    { word: 'GITHUB', clue: 'Where BOMBANDS lives' },
+    { word: 'FETCH', clue: 'Download changes without merging' },
+    { word: 'DEPLOY', clue: 'Publish your app to a live server' },
+    { word: 'STASH', clue: 'Temporarily shelve uncommitted changes' },
+    { word: 'CLONE', clue: 'Copy a repo to your local machine' },
+    { word: 'ISSUE', clue: 'A tracked task or bug on GitHub' },
+  ],
+  'BOMBANDS Games': [
+    { word: 'SUDOKU', clue: 'Number puzzle, also a BOMBANDS game' },
+    { word: 'WORDLE', clue: 'Guess the five letter word game' },
+    { word: 'HANGMAN', clue: 'Guess letters before the drawing completes' },
+    { word: 'SCRABBLE', clue: 'Tile based word game' },
+    { word: 'CROSSWORD', clue: 'The game you are playing right now' },
+    { word: 'STREAK', clue: 'Consecutive daily wins' },
+    { word: 'TILE', clue: 'A single lettered game piece' },
+    { word: 'PUZZLE', clue: 'A brain-teasing challenge' },
+  ],
+  'Web Dev': [
+    { word: 'REACT', clue: 'JS library for building UIs' },
+    { word: 'SUPABASE', clue: 'Backend used for auth here' },
+    { word: 'VERCEL', clue: 'Common place to deploy a Next.js app' },
+    { word: 'ARRAY', clue: 'Ordered collection data structure' },
+    { word: 'DEBUG', clue: 'Find and fix errors in code' },
+    { word: 'COMPONENT', clue: 'A reusable piece of UI' },
+    { word: 'TAILWIND', clue: 'Utility-first CSS framework' },
+    { word: 'HOOK', clue: 'useState and useEffect are examples' },
+  ],
+}
 
+const CATEGORY_KEYS = Object.keys(CATEGORIES)
 const SIZE = 20
 
 function mulberry32(seed: number) {
@@ -51,7 +69,7 @@ function inBounds(r: number, c: number) {
   return r >= 0 && r < SIZE && c >= 0 && c < SIZE
 }
 
-function canPlace(grid: (string | null)[][], word: string, row: number, col: number, dir: 'across' | 'down') {
+function canPlace(grid: (string | null)[][], word: string, row: number, col: number, dir: Direction) {
   const dr = dir === 'down' ? 1 : 0
   const dc = dir === 'across' ? 1 : 0
   const br = row - dr, bc = col - dc
@@ -78,7 +96,7 @@ function canPlace(grid: (string | null)[][], word: string, row: number, col: num
   return hasIntersection
 }
 
-function place(grid: (string | null)[][], word: string, row: number, col: number, dir: 'across' | 'down') {
+function place(grid: (string | null)[][], word: string, row: number, col: number, dir: Direction) {
   const dr = dir === 'down' ? 1 : 0
   const dc = dir === 'across' ? 1 : 0
   for (let i = 0; i < word.length; i++) grid[row + dr * i][col + dc * i] = word[i]
@@ -97,7 +115,7 @@ function attemptGenerate(words: WordEntry[], rng: () => number) {
 
   for (let i = 1; i < list.length; i++) {
     const w = list[i]
-    const candidates: { row: number; col: number; dir: 'across' | 'down' }[] = []
+    const candidates: { row: number; col: number; dir: Direction }[] = []
     for (let r = 0; r < SIZE; r++) {
       for (let c = 0; c < SIZE; c++) {
         const letter = grid[r][c]
@@ -122,8 +140,8 @@ function attemptGenerate(words: WordEntry[], rng: () => number) {
   return { grid, placed }
 }
 
-function generateCrossword(rng: () => number) {
-  const shuffled = seededShuffle(WORD_BANK, rng).slice(0, 9)
+function generateCrossword(words: WordEntry[], rng: () => number) {
+  const shuffled = seededShuffle(words, rng).slice(0, 9)
   let best: { grid: (string | null)[][]; placed: Placement[] } | null = null
   for (let attempt = 0; attempt < 6; attempt++) {
     const result = attemptGenerate(shuffled, rng)
@@ -219,6 +237,7 @@ const MAX_HINTS = 3
 
 export default function CrosswordPage() {
   const [mode, setMode] = useState<'daily' | 'practice'>('daily')
+  const [category, setCategory] = useState<string>(CATEGORY_KEYS[0])
   const [solution, setSolution] = useState<(string | null)[][]>([])
   const [placements, setPlacements] = useState<Placement[]>([])
   const [bounds, setBounds] = useState({ minR: 0, maxR: 0, minC: 0, maxC: 0 })
@@ -230,18 +249,26 @@ export default function CrosswordPage() {
   const [streak, setStreak] = useState<StreakData>({ count: 0, lastWinDate: null })
   const [confettiKey, setConfettiKey] = useState<number | null>(null)
   const [elapsed, setElapsed] = useState(0)
+  const [isPaused, setIsPaused] = useState(false)
   const [copied, setCopied] = useState(false)
+  const [selected, setSelected] = useState<[number, number] | null>(null)
+  const [direction, setDirection] = useState<Direction>('across')
   const inputRefs = useRef<Record<string, HTMLInputElement | null>>({})
   const confettiTimeout = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const justFocusedRef = useRef(false)
 
   useEffect(() => {
     setStreak(getStreak())
   }, [])
 
-  const newPuzzle = useCallback((useDaily: boolean) => {
+  const effectiveCategory = mode === 'daily'
+    ? CATEGORY_KEYS[Math.floor(Date.now() / 86400000) % CATEGORY_KEYS.length]
+    : category
+
+  const newPuzzle = useCallback((useDaily: boolean, cat: string) => {
     const seed = useDaily ? Math.floor(Date.now() / 86400000) : Math.floor(Math.random() * 1e9)
     const rng = mulberry32(seed)
-    const gen = generateCrossword(rng)
+    const gen = generateCrossword(CATEGORIES[cat], rng)
     const b = computeBounds(gen.grid)
     const rows = b.maxR - b.minR + 1, cols = b.maxC - b.minC + 1
     setSolution(gen.grid)
@@ -253,17 +280,21 @@ export default function CrosswordPage() {
     setHintsUsed(0)
     setCheckResult(null)
     setElapsed(0)
+    setIsPaused(false)
+    setSelected(null)
+    setDirection('across')
   }, [])
 
   useEffect(() => {
-    newPuzzle(mode === 'daily')
-  }, [mode, newPuzzle])
+    newPuzzle(mode === 'daily', effectiveCategory)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode, category, newPuzzle])
 
   useEffect(() => {
-    if (status !== 'playing') return
+    if (status !== 'playing' || isPaused) return
     const interval = setInterval(() => setElapsed((e) => e + 1), 1000)
     return () => clearInterval(interval)
-  }, [status, solution])
+  }, [status, solution, isPaused])
 
   useEffect(() => {
     if (solution.length === 0 || userGrid.length === 0) return
@@ -273,9 +304,7 @@ export default function CrosswordPage() {
       for (let c = 0; c < cols; c++) {
         const correct = solution[r + bounds.minR]?.[c + bounds.minC]
         if (correct === null || correct === undefined) continue
-        if (userGrid[r]?.[c] !== correct) {
-          complete = false
-        }
+        if (userGrid[r]?.[c] !== correct) complete = false
       }
     }
     if (complete) setStatus('won')
@@ -293,8 +322,56 @@ export default function CrosswordPage() {
     }
   }, [status, mode])
 
+  function cellExists(r: number, c: number): boolean {
+    return !!solution[r + bounds.minR]?.[c + bounds.minC]
+  }
+
+  function directionsAt(r: number, c: number) {
+    const absR = r + bounds.minR, absC = c + bounds.minC
+    let across = false, down = false
+    for (const p of placements) {
+      if (p.dir === 'across' && p.row === absR && absC >= p.col && absC < p.col + p.word.length) across = true
+      if (p.dir === 'down' && p.col === absC && absR >= p.row && absR < p.row + p.word.length) down = true
+    }
+    return { across, down }
+  }
+
+  function findNextCell(r: number, c: number, dir: Direction, back = false): [number, number] | null {
+    const step = back ? -1 : 1
+    let nr = r, nc = c
+    while (true) {
+      nr = dir === 'down' ? nr + step : nr
+      nc = dir === 'across' ? nc + step : nc
+      const rows = bounds.maxR - bounds.minR + 1, cols = bounds.maxC - bounds.minC + 1
+      if (nr < 0 || nc < 0 || nr >= rows || nc >= cols) return null
+      if (cellExists(nr, nc)) return [nr, nc]
+    }
+  }
+
+  function focusCell(r: number, c: number) {
+    inputRefs.current[`${r}-${c}`]?.focus()
+  }
+
+  function handleCellFocus(r: number, c: number) {
+    justFocusedRef.current = true
+    setSelected([r, c])
+    const dirs = directionsAt(r, c)
+    setDirection((prev) => ((prev === 'across' && dirs.across) || (prev === 'down' && dirs.down) ? prev : (dirs.across ? 'across' : 'down')))
+  }
+
+  function handleCellClick(r: number, c: number) {
+    if (justFocusedRef.current) {
+      justFocusedRef.current = false
+      return
+    }
+    const dirs = directionsAt(r, c)
+    if (dirs.across && dirs.down) {
+      setDirection((d) => (d === 'across' ? 'down' : 'across'))
+    }
+  }
+
   function handleInput(r: number, c: number, raw: string) {
-    if (status !== 'playing') return
+    if (status !== 'playing' || isPaused) return
     const v = raw.toUpperCase().replace(/[^A-Z]/, '')
     setUserGrid((prev) => {
       const next = prev.map((row) => [...row])
@@ -303,20 +380,37 @@ export default function CrosswordPage() {
     })
     setCheckResult(null)
     if (v) {
-      const cols = bounds.maxC - bounds.minC + 1
-      for (let cc = c + 1; cc < cols; cc++) {
-        const el = inputRefs.current[`${r}-${cc}`]
-        if (el) { el.focus(); break }
-      }
+      const nextCell = findNextCell(r, c, direction)
+      if (nextCell) focusCell(nextCell[0], nextCell[1])
     }
   }
 
   function handleKeyDown(r: number, c: number, e: React.KeyboardEvent<HTMLInputElement>) {
     if (e.key === 'Backspace' && !userGrid[r]?.[c]) {
-      for (let cc = c - 1; cc >= 0; cc--) {
-        const el = inputRefs.current[`${r}-${cc}`]
-        if (el) { el.focus(); break }
-      }
+      const prevCell = findNextCell(r, c, direction, true)
+      if (prevCell) focusCell(prevCell[0], prevCell[1])
+      return
+    }
+    if (e.key === 'ArrowRight') {
+      e.preventDefault()
+      setDirection('across')
+      const next = findNextCell(r, c, 'across')
+      if (next) focusCell(next[0], next[1])
+    } else if (e.key === 'ArrowLeft') {
+      e.preventDefault()
+      setDirection('across')
+      const prev = findNextCell(r, c, 'across', true)
+      if (prev) focusCell(prev[0], prev[1])
+    } else if (e.key === 'ArrowDown') {
+      e.preventDefault()
+      setDirection('down')
+      const next = findNextCell(r, c, 'down')
+      if (next) focusCell(next[0], next[1])
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault()
+      setDirection('down')
+      const prev = findNextCell(r, c, 'down', true)
+      if (prev) focusCell(prev[0], prev[1])
     }
   }
 
@@ -335,6 +429,19 @@ export default function CrosswordPage() {
 
   function useHint() {
     if (status !== 'playing' || hintsUsed >= MAX_HINTS) return
+    if (selected) {
+      const [r, c] = selected
+      const correct = solution[r + bounds.minR]?.[c + bounds.minC]
+      if (correct && userGrid[r]?.[c] !== correct) {
+        setUserGrid((prev) => {
+          const next = prev.map((row) => [...row])
+          next[r][c] = correct
+          return next
+        })
+        setHintsUsed((h) => h + 1)
+        return
+      }
+    }
     const rows = bounds.maxR - bounds.minR + 1, cols = bounds.maxC - bounds.minC + 1
     for (let r = 0; r < rows; r++) {
       for (let c = 0; c < cols; c++) {
@@ -402,7 +509,7 @@ export default function CrosswordPage() {
           </button>
           {mode === 'practice' && (
             <button
-              onClick={() => newPuzzle(false)}
+              onClick={() => newPuzzle(false, category)}
               className="px-4 py-2 rounded bg-blue-500 text-white transition active:scale-95 hover:brightness-110"
             >
               New puzzle
@@ -411,14 +518,21 @@ export default function CrosswordPage() {
           {status === 'playing' && (
             <>
               <button
+                onClick={() => setIsPaused((p) => !p)}
+                className="px-4 py-2 rounded bg-indigo-500 text-white transition active:scale-95 hover:brightness-110"
+              >
+                {isPaused ? '▶ Resume' : '⏸ Pause'}
+              </button>
+              <button
                 onClick={handleCheck}
-                className="px-4 py-2 rounded bg-gray-500 text-white transition active:scale-95 hover:brightness-110"
+                disabled={isPaused}
+                className="px-4 py-2 rounded bg-gray-500 text-white transition active:scale-95 hover:brightness-110 disabled:opacity-40"
               >
                 ✓ Check
               </button>
               <button
                 onClick={useHint}
-                disabled={hintsUsed >= MAX_HINTS}
+                disabled={hintsUsed >= MAX_HINTS || isPaused}
                 className="px-4 py-2 rounded bg-amber-500 text-white transition active:scale-95 hover:brightness-110 disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 💡 Hint ({MAX_HINTS - hintsUsed})
@@ -427,9 +541,28 @@ export default function CrosswordPage() {
           )}
         </div>
 
+        {mode === 'practice' && (
+          <div className="flex gap-2 flex-wrap justify-center">
+            {CATEGORY_KEYS.map((cat) => (
+              <button
+                key={cat}
+                onClick={() => setCategory(cat)}
+                className={`px-3 py-1 rounded-full text-xs border transition ${
+                  category === cat
+                    ? 'bg-purple-500 text-white border-purple-500'
+                    : 'bg-transparent text-gray-600 dark:text-gray-300 border-gray-400 dark:border-gray-600'
+                }`}
+              >
+                {cat}
+              </button>
+            ))}
+          </div>
+        )}
+
         <div className="flex flex-col items-center gap-1 text-sm text-gray-600 dark:text-gray-400">
           {mode === 'daily' && <p>🔥 Streak: {streak.count}</p>}
-          <p>⏱ {formatTime(elapsed)}</p>
+          <p>Category: {effectiveCategory}</p>
+          <p>⏱ {isPaused ? 'Paused' : formatTime(elapsed)}</p>
         </div>
 
         {status === 'won' && (
@@ -438,7 +571,12 @@ export default function CrosswordPage() {
           </p>
         )}
 
-        <div className="flex gap-6 flex-wrap justify-center w-full">
+        <div className="relative flex gap-6 flex-wrap justify-center w-full">
+          {isPaused && (
+            <div className="absolute inset-0 z-10 flex items-center justify-center bg-gray-200/90 dark:bg-black/80 rounded-lg">
+              <p className="text-gray-900 dark:text-white font-semibold">Paused — click Resume to continue</p>
+            </div>
+          )}
           <div
             className="inline-grid gap-0.5"
             style={{ gridTemplateColumns: `repeat(${cols}, 26px)`, gridTemplateRows: `repeat(${rows}, 26px)` }}
@@ -451,14 +589,33 @@ export default function CrosswordPage() {
                 }
                 const num = numbers[r]?.[c]
                 const isWrong = checkResult?.has(`${r}-${c}`)
+                const isSelected = selected && selected[0] === r && selected[1] === c
+                const dirs = directionsAt(r, c)
+                const isInActiveWord =
+                  selected &&
+                  ((direction === 'across' && dirs.across && directionsAt(selected[0], selected[1]).across &&
+                    placements.some(p => p.dir === 'across' && p.row === r + bounds.minR &&
+                      c + bounds.minC >= p.col && c + bounds.minC < p.col + p.word.length &&
+                      selected[1] + bounds.minC >= p.col && selected[1] + bounds.minC < p.col + p.word.length &&
+                      selected[0] + bounds.minR === p.row)) ||
+                  (direction === 'down' && dirs.down &&
+                    placements.some(p => p.dir === 'down' && p.col === c + bounds.minC &&
+                      r + bounds.minR >= p.row && r + bounds.minR < p.row + p.word.length &&
+                      selected[0] + bounds.minR >= p.row && selected[0] + bounds.minR < p.row + p.word.length &&
+                      selected[1] + bounds.minC === p.col)))
+
                 return (
                   <div
                     key={`${r}-${c}`}
                     className={`relative border ${
-                      isWrong
+                      isSelected
+                        ? 'border-blue-500 bg-blue-200 dark:bg-blue-900/60'
+                        : isWrong
                         ? 'border-red-500 bg-red-100 dark:bg-red-900/40'
                         : status === 'won'
                         ? 'border-green-400 bg-green-100 dark:bg-green-900/40'
+                        : isInActiveWord
+                        ? 'border-gray-400 dark:border-gray-600 bg-blue-50 dark:bg-blue-950/40'
                         : 'border-gray-400 dark:border-gray-600 bg-white dark:bg-gray-900'
                     }`}
                   >
@@ -473,7 +630,9 @@ export default function CrosswordPage() {
                       value={userGrid[r]?.[c] ?? ''}
                       onChange={(e) => handleInput(r, c, e.target.value)}
                       onKeyDown={(e) => handleKeyDown(r, c, e)}
-                      disabled={status !== 'playing'}
+                      onFocus={() => handleCellFocus(r, c)}
+                      onClick={() => handleCellClick(r, c)}
+                      disabled={status !== 'playing' || isPaused}
                       className="w-full h-full text-center font-medium uppercase bg-transparent outline-none text-sm text-gray-900 dark:text-white"
                     />
                   </div>
