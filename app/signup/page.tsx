@@ -2,15 +2,27 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
+import { supabase } from '@/lib/supabaseClient'
+import { useRouter } from 'next/navigation'
 
 export default function SignupPage() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
+  const router = useRouter()
 
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    // auth logic added in a later issue
+    if (password !== confirmPassword) {
+      console.error("Passwords do not match")
+      return
+    }
+    const { error } = await supabase.auth.signUp({ email, password })
+    if (error) {
+      console.error(error.message)
+      return
+    }
+    router.push('/')
   }
 
   return (
