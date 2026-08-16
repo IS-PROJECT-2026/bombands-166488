@@ -6,6 +6,8 @@ import Image from 'next/image'
 import { usePathname } from 'next/navigation'
 import ThemeToggle from './ThemeToggle'
 import { basePath } from '@/lib/basePath'
+import { useAuth } from './AuthProvider'
+import { supabase } from '@/lib/supabaseClient'
 
 const games = [
   { name: 'Crossword', href: '/games/crossword' },
@@ -19,6 +21,11 @@ const games = [
 export default function Navbar() {
   const pathname = usePathname()
   const [menuOpen, setMenuOpen] = useState(false)
+  const { user } = useAuth()
+
+  async function handleLogout() {
+    await supabase.auth.signOut()
+  }
 
   return (
     <nav className="border-b border-gray-200 dark:border-gray-800">
@@ -43,8 +50,17 @@ export default function Navbar() {
         </div>
 
         <div className="hidden md:flex items-center gap-3">
-          <Link href="/login" className="text-sm">Log in</Link>
-          <Link href="/signup" className="text-sm">Sign up</Link>
+          {user ? (
+            <>
+              <span className="text-sm text-gray-600 dark:text-gray-400">{user.email}</span>
+              <button onClick={handleLogout} className="text-sm">Log out</button>
+            </>
+          ) : (
+            <>
+              <Link href="/login" className="text-sm">Log in</Link>
+              <Link href="/signup" className="text-sm">Sign up</Link>
+            </>
+          )}
           <ThemeToggle />
         </div>
 
@@ -76,9 +92,26 @@ export default function Navbar() {
               {game.name}
             </Link>
           ))}
-          <div className="flex gap-4 pt-2 border-t border-gray-200 dark:border-gray-800">
-            <Link href="/login" className="text-sm" onClick={() => setMenuOpen(false)}>Log in</Link>
-            <Link href="/signup" className="text-sm" onClick={() => setMenuOpen(false)}>Sign up</Link>
+          <div className="flex flex-col gap-2 pt-2 border-t border-gray-200 dark:border-gray-800">
+            {user ? (
+              <>
+                <span className="text-sm text-gray-600 dark:text-gray-400">{user.email}</span>
+                <button
+                  onClick={() => {
+                    handleLogout()
+                    setMenuOpen(false)
+                  }}
+                  className="text-sm text-left"
+                >
+                  Log out
+                </button>
+              </>
+            ) : (
+              <div className="flex gap-4">
+                <Link href="/login" className="text-sm" onClick={() => setMenuOpen(false)}>Log in</Link>
+                <Link href="/signup" className="text-sm" onClick={() => setMenuOpen(false)}>Sign up</Link>
+              </div>
+            )}
           </div>
         </div>
       )}
