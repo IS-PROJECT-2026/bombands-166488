@@ -119,7 +119,7 @@ export default function ScrabblePage() {
   const [bestScore, setBestScore] = useState(0)
   const [confettiKey, setConfettiKey] = useState<number | null>(null)
   const [copied, setCopied] = useState(false)
-  const [lastWord, setLastWord] = useState<{ word: string; points: number } | null>(null)
+  const [lastWord, setLastWord] = useState<{ words: string[]; points: number } | null>(null)
   const validatedWordsCache = useRef<Map<string, boolean>>(new Map())
   const confettiTimeout = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -150,6 +150,18 @@ export default function ScrabblePage() {
     [selectedRackIndex, rack, board]
   )
 
+  function returnSingleTile(row: number, col: number) {
+    const isPending = pendingTiles.some((t) => t.row === row && t.col === col)
+    if (!isPending) return
+    setBoard((prev) => {
+      const next = prev.map((r) => [...r])
+      next[row][col] = null
+      return next
+    })
+    setPendingTiles((prev) => prev.filter((t) => !(t.row === row && t.col === col)))
+    setMessage('')
+  }
+
   function recallPendingTiles() {
     setBoard((prev) => {
       const next = prev.map((r) => [...r])
@@ -167,7 +179,7 @@ export default function ScrabblePage() {
     setRack((prev) => shuffleArray(prev))
   }
 
-  function computeWordCells(): Cell[] | null {
+  function computeMainWord(): { cells: Cell[]; direction: 'h' | 'v' } | null {
     if (pendingTiles.length === 0) return null
 
     const rows = new Set(pendingTiles.map((t) => t.row))
@@ -195,7 +207,7 @@ export default function ScrabblePage() {
         if (!board[row][c]) return null
         cells.push([row, c])
       }
-      return cells
+      return { cells, direction }
     } else {
       const col = pendingTiles[0].col
       let minRow = Math.min(...pendingTiles.map((t) => t.row))
@@ -207,8 +219,39 @@ export default function ScrabblePage() {
         if (!board[r][col]) return null
         cells.push([r, col])
       }
-      return cells
+      return { cells, direction }
     }
+  }
+
+  function getPerpendicularWords(mainDirection: 'h' | 'v'): Cell[][] {
+    const perpWords: Cell[][] = []
+    const perpIsVertical = mainDirection === 'h'
+
+    pendingTiles.forEach(({ row, col }) => {
+      if (perpIsVertical) {
+        let minRow = row
+        let maxRow = row
+        while (minRow > 0 && board[minRow - 1][col]) minRow--
+        while (maxRow < BOARD_SIZE - 1 && board[maxRow + 1][col]) maxRow++
+        if (maxRow > minRow) {
+          const cells: Cell[] = []
+          for (let r = minRow; r <= maxRow; r++) cells.push([r, col])
+          perpWords.push(cells)
+        }
+      } else {
+        let minCol = col
+        let maxCol = col
+        while (minCol > 0 && board[row][minCol - 1]) minCol--
+        while (maxCol < BOARD_SIZE - 1 && board[row][maxCol + 1]) maxCol++
+        if (maxCol > minCol) {
+          const cells: Cell[] = []
+          for (let c = minCol; c <= maxCol; c++) cells.push([row, c])
+          perpWords.push(cells)
+        }
+      }
+    })
+
+    return perpWords
   }
 
   async function isRealWord(word: string): Promise<boolean> {
@@ -224,33 +267,7 @@ export default function ScrabblePage() {
     }
   }
 
-  async function submitWord() {
-    if (pendingTiles.length === 0) {
-      setMessage('Place some tiles first')
-      return
-    }
-
-    const cells = computeWordCells()
-    if (!cells) {
-      setMessage('Tiles must form a single straight line, no gaps')
-      return
-    }
-
-    const word = cells.map(([r, c]) => board[r][c]!.letter).join('')
-    if (word.length < 2) {
-      setMessage('Word must be at least 2 letters')
-      return
-    }
-
-    setIsValidating(true)
-    const valid = await isRealWord(word)
-    setIsValidating(false)
-
-    if (!valid) {
-      setMessage(`"${word.toUpperCase()}" isn't a recognized word`)
-      return
-    }
-
+  function scoreWord(cells: Cell[]): number {
     let letterSum = 0
     let wordMultiplier = 1
     cells.forEach(([r, c]) => {
@@ -266,11 +283,39 @@ export default function ScrabblePage() {
       }
       letterSum += val
     })
-    const roundScore = letterSum * wordMultiplier
+    return letterSum * wordMultiplier
+  }
 
+  async function submitWord() {
+    if (pendingTiles.length === 0) {
+      setMessage('Place some tiles first')
+      return
+    }
+
+    const main = computeMainWord()
+    if (!main || main.cells.length < 2) {
+      setMessage('Tiles must form a word of at least 2 letters, no gaps')
+      return
+    }
+
+    const perpWords = getPerpendicularWords(main.direction)
+    const allWords = [main.cells, ...perpWords]
+    const wordTexts = allWords.map((cells) => cells.map(([r, c]) => board[r][c]!.letter).join(''))
+
+    setIsValidating(true)
+    const results = await Promise.all(wordTexts.map((w) => isRealWord(w)))
+    setIsValidating(false)
+
+    const invalidIndex = results.findIndex((v) => !v)
+    if (invalidIndex !== -1) {
+      setMessage(`"${wordTexts[invalidIndex].toUpperCase()}" isn't a recognized word — the whole play is rejected. Adjust or recall.`)
+      return
+    }
+
+    const roundScore = allWords.reduce((sum, cells) => sum + scoreWord(cells), 0)
     const newTotal = totalScore + roundScore
     setTotalScore(newTotal)
-    setLastWord({ word: word.toUpperCase(), points: roundScore })
+    setLastWord({ words: wordTexts.map((w) => w.toUpperCase()), points: roundScore })
 
     const remaining = rack.filter((_, i) => !usedRackIndices.has(i))
     const newTiles = drawTiles(pendingTiles.length)
@@ -278,7 +323,6 @@ export default function ScrabblePage() {
 
     setPendingTiles([])
     setMessage('')
-
     setBestScore(maybeUpdateBestScore(newTotal))
 
     if (confettiTimeout.current) clearTimeout(confettiTimeout.current)
@@ -321,8 +365,8 @@ export default function ScrabblePage() {
         </div>
 
         {lastWord && (
-          <p className="text-sm text-green-600 dark:text-green-400 font-medium">
-            Last word: {lastWord.word} (+{lastWord.points})
+          <p className="text-sm text-green-600 dark:text-green-400 font-medium text-center">
+            Words: {lastWord.words.join(', ')} (+{lastWord.points})
           </p>
         )}
 
@@ -339,11 +383,12 @@ export default function ScrabblePage() {
                 <button
                   key={`${r}-${c}`}
                   onClick={() => placeTile(r, c)}
-                  disabled={tile !== null}
+                  onDoubleClick={() => returnSingleTile(r, c)}
+                  title={isPending ? 'Double-click to return to rack' : undefined}
                   className={`w-6 h-6 sm:w-7 sm:h-7 flex items-center justify-center relative text-[10px] sm:text-xs font-bold uppercase border transition ${
                     tile
                       ? isPending
-                        ? 'bg-amber-400 border-amber-500 text-amber-950'
+                        ? 'bg-amber-400 border-amber-500 text-amber-950 cursor-pointer'
                         : 'bg-amber-100 dark:bg-amber-900/60 border-amber-300 dark:border-amber-700 text-amber-900 dark:text-amber-200'
                       : bonus
                       ? `${BONUS_STYLES[bonus]} border-gray-300 dark:border-gray-700 hover:brightness-95`
@@ -372,8 +417,8 @@ export default function ScrabblePage() {
           )}
         </div>
 
-        {message && <p className="text-red-500 text-sm">{message}</p>}
-        {isValidating && <p className="text-gray-500 dark:text-gray-400 text-sm">Checking word...</p>}
+        {message && <p className="text-red-500 text-sm text-center max-w-sm">{message}</p>}
+        {isValidating && <p className="text-gray-500 dark:text-gray-400 text-sm">Checking words...</p>}
 
         <div className="flex gap-2 flex-wrap justify-center">
           <button
@@ -388,7 +433,7 @@ export default function ScrabblePage() {
             disabled={pendingTiles.length === 0}
             className="px-4 py-2 rounded bg-gray-500 text-white font-semibold transition active:scale-95 hover:brightness-110 disabled:opacity-40 disabled:cursor-not-allowed"
           >
-            Recall tiles
+            Recall all
           </button>
           <button
             onClick={shuffleRack}
@@ -431,7 +476,7 @@ export default function ScrabblePage() {
           })}
         </div>
         <p className="text-xs text-gray-400 dark:text-gray-600">
-          Tap a tile, then tap a board square. Place letters in one straight line, then submit — words can connect to existing tiles.
+          Tap a tile, then a board square. Double-click a placed tile to undo just that one. Every word your tiles form (main + crossing) must be valid.
         </p>
       </div>
     </main>
