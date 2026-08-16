@@ -1,265 +1,470 @@
-'use client';
+'use client'
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react'
 
-type WordEntry = { word: string; clue: string };
-type Placement = WordEntry & { row: number; col: number; dir: 'across' | 'down' };
+type ClueDirection = 'across' | 'down'
 
-const WORD_BANK: WordEntry[] = [
-  { word: 'REACT', clue: 'JS library for building UIs' },
-  { word: 'PYTHON', clue: 'Language named after a comedy troupe' },
-  { word: 'GITHUB', clue: 'Where BOMBANDS lives' },
-  { word: 'SUPABASE', clue: 'Backend used for auth here' },
-  { word: 'COMMIT', clue: 'A saved snapshot in git' },
-  { word: 'BRANCH', clue: 'Isolated line of development in git' },
-  { word: 'MERGE', clue: 'Combining two branches' },
-  { word: 'SUDOKU', clue: 'Number puzzle, also a BOMBANDS game' },
-  { word: 'WORDLE', clue: 'Guess the five letter word game' },
-  { word: 'HANGMAN', clue: 'Guess letters before the drawing completes' },
-  { word: 'SCRABBLE', clue: 'Tile based word game' },
-  { word: 'DEBUG', clue: 'Find and fix errors in code' },
-  { word: 'ARRAY', clue: 'Ordered collection data structure' },
-  { word: 'VERCEL', clue: 'Where the Next.js app deploys' },
-];
-
-const SIZE = 20;
-
-function emptyGrid(): (string | null)[][] {
-  return Array.from({ length: SIZE }, () => Array(SIZE).fill(null));
-}
-function inBounds(r: number, c: number) {
-  return r >= 0 && r < SIZE && c >= 0 && c < SIZE;
+type Clue = {
+  number: number
+  direction: ClueDirection
+  row: number
+  col: number
+  answer: string
+  clue: string
 }
 
-function canPlace(grid: (string | null)[][], word: string, row: number, col: number, dir: 'across' | 'down') {
-  const dr = dir === 'down' ? 1 : 0;
-  const dc = dir === 'across' ? 1 : 0;
-  const br = row - dr, bc = col - dc;
-  if (inBounds(br, bc) && grid[br][bc] !== null) return false;
-  const ar = row + dr * word.length, ac = col + dc * word.length;
-  if (inBounds(ar, ac) && grid[ar][ac] !== null) return false;
-
-  let hasIntersection = false;
-  for (let i = 0; i < word.length; i++) {
-    const r = row + dr * i, c = col + dc * i;
-    if (!inBounds(r, c)) return false;
-    const existing = grid[r][c];
-    if (existing !== null) {
-      if (existing !== word[i]) return false;
-      hasIntersection = true;
-    } else if (dir === 'across') {
-      if (inBounds(r - 1, c) && grid[r - 1][c] !== null) return false;
-      if (inBounds(r + 1, c) && grid[r + 1][c] !== null) return false;
-    } else {
-      if (inBounds(r, c - 1) && grid[r][c - 1] !== null) return false;
-      if (inBounds(r, c + 1) && grid[r][c + 1] !== null) return false;
-    }
-  }
-  return hasIntersection;
+type CrosswordPuzzle = {
+  theme: string
+  size: number
+  clues: Clue[]
 }
 
-function place(grid: (string | null)[][], word: string, row: number, col: number, dir: 'across' | 'down') {
-  const dr = dir === 'down' ? 1 : 0;
-  const dc = dir === 'across' ? 1 : 0;
-  for (let i = 0; i < word.length; i++) grid[row + dr * i][col + dc * i] = word[i];
+// '#' marks a blocked cell; everything else is buildable from the clues below
+const PUZZLES: CrosswordPuzzle[] = [
+  {
+    theme: 'Git Basics',
+    size: 7,
+    clues: [
+      { number: 1, direction: 'across', row: 0, col: 0, answer: 'BRANCH', clue: 'A separate line of development in Git' },
+      { number: 2, direction: 'down', row: 0, col: 2, answer: 'ISSUE', clue: 'A tracked task or bug on GitHub' },
+      { number: 3, direction: 'across', row: 2, col: 0, answer: 'MERGE', clue: 'Combining two branches into one' },
+      { number: 4, direction: 'down', row: 0, col: 5, answer: 'COMMIT', clue: 'A saved snapshot of changes' },
+      { number: 5, direction: 'across', row: 4, col: 1, answer: 'REPO', clue: 'Short for repository' },
+    ],
+  },
+  {
+    theme: 'GitHub Workflow',
+    size: 7,
+    clues: [
+      { number: 1, direction: 'across', row: 0, col: 0, answer: 'CLONE', clue: 'Copy a repo to your local machine' },
+      { number: 2, direction: 'down', row: 0, col: 1, answer: 'LABEL', clue: 'A colored tag on an issue or PR' },
+      { number: 3, direction: 'across', row: 2, col: 0, answer: 'DEPLOY', clue: 'Publish your app to a live server' },
+      { number: 4, direction: 'down', row: 0, col: 4, answer: 'STASH', clue: 'Temporarily shelve uncommitted changes' },
+      { number: 5, direction: 'across', row: 4, col: 1, answer: 'FETCH', clue: 'Download changes without merging them' },
+    ],
+  },
+]
+
+type CellInfo = {
+  correctLetter: string
+  numbers: number[]
+  clueRefs: { direction: ClueDirection; clueNumber: number }[]
 }
 
-function attemptGenerate(words: WordEntry[]) {
-  const grid = emptyGrid();
-  const list = [...words].sort((a, b) => b.word.length - a.word.length);
-  const placed: Placement[] = [];
+function buildGrid(puzzle: CrosswordPuzzle): (CellInfo | null)[][] {
+  const grid: (CellInfo | null)[][] = Array.from({ length: puzzle.size }, () =>
+    Array(puzzle.size).fill(null)
+  )
 
-  const first = list[0];
-  const startR = Math.floor(SIZE / 2);
-  const startC = Math.floor(SIZE / 2 - first.word.length / 2);
-  place(grid, first.word, startR, startC, 'across');
-  placed.push({ ...first, row: startR, col: startC, dir: 'across' });
-
-  for (let i = 1; i < list.length; i++) {
-    const w = list[i];
-    const candidates: { row: number; col: number; dir: 'across' | 'down' }[] = [];
-    for (let r = 0; r < SIZE; r++) {
-      for (let c = 0; c < SIZE; c++) {
-        const letter = grid[r][c];
-        if (letter === null) continue;
-        for (let li = 0; li < w.word.length; li++) {
-          if (w.word[li] !== letter) continue;
-          const acrossRow = r, acrossCol = c - li;
-          if (canPlace(grid, w.word, acrossRow, acrossCol, 'across'))
-            candidates.push({ row: acrossRow, col: acrossCol, dir: 'across' });
-          const downRow = r - li, downCol = c;
-          if (canPlace(grid, w.word, downRow, downCol, 'down'))
-            candidates.push({ row: downRow, col: downCol, dir: 'down' });
-        }
+  puzzle.clues.forEach((clue) => {
+    clue.answer.split('').forEach((letter, i) => {
+      const r = clue.direction === 'across' ? clue.row : clue.row + i
+      const c = clue.direction === 'across' ? clue.col + i : clue.col
+      if (!grid[r][c]) {
+        grid[r][c] = { correctLetter: letter, numbers: [], clueRefs: [] }
       }
-    }
-    if (candidates.length > 0) {
-      const pick = candidates[Math.floor(Math.random() * candidates.length)];
-      place(grid, w.word, pick.row, pick.col, pick.dir);
-      placed.push({ ...w, row: pick.row, col: pick.col, dir: pick.dir });
-    }
-  }
-  return { grid, placed };
-}
-
-function generateCrossword() {
-  const shuffled = [...WORD_BANK].sort(() => Math.random() - 0.5).slice(0, 9);
-  let best: { grid: (string | null)[][]; placed: Placement[] } | null = null;
-  for (let attempt = 0; attempt < 6; attempt++) {
-    const result = attemptGenerate(shuffled);
-    if (!best || result.placed.length > best.placed.length) best = result;
-  }
-  return best!;
-}
-
-function computeBounds(grid: (string | null)[][]) {
-  let minR = SIZE, maxR = -1, minC = SIZE, maxC = -1;
-  for (let r = 0; r < SIZE; r++) {
-    for (let c = 0; c < SIZE; c++) {
-      if (grid[r][c] !== null) {
-        minR = Math.min(minR, r); maxR = Math.max(maxR, r);
-        minC = Math.min(minC, c); maxC = Math.max(maxC, c);
+      if (i === 0 && !grid[r][c]!.numbers.includes(clue.number)) {
+        grid[r][c]!.numbers.push(clue.number)
       }
-    }
-  }
-  return { minR, maxR, minC, maxC };
+      grid[r][c]!.clueRefs.push({ direction: clue.direction, clueNumber: clue.number })
+    })
+  })
+
+  return grid
 }
 
-function buildNumbers(grid: (string | null)[][], b: ReturnType<typeof computeBounds>) {
-  const rows = b.maxR - b.minR + 1, cols = b.maxC - b.minC + 1;
-  const numbers: (number | null)[][] = Array.from({ length: rows }, () => Array(cols).fill(null));
-  let n = 1;
-  for (let r = b.minR; r <= b.maxR; r++) {
-    for (let c = b.minC; c <= b.maxC; c++) {
-      if (grid[r][c] === null) continue;
-      const leftEmpty = !inBounds(r, c - 1) || grid[r][c - 1] === null;
-      const rightFull = inBounds(r, c + 1) && grid[r][c + 1] !== null;
-      const upEmpty = !inBounds(r - 1, c) || grid[r - 1][c] === null;
-      const downFull = inBounds(r + 1, c) && grid[r + 1][c] !== null;
-      if ((leftEmpty && rightFull) || (upEmpty && downFull)) {
-        numbers[r - b.minR][c - b.minC] = n;
-        n++;
-      }
-    }
+function getDailyPuzzle(): CrosswordPuzzle {
+  const daysSinceEpoch = Math.floor(Date.now() / 86400000)
+  return PUZZLES[daysSinceEpoch % PUZZLES.length]
+}
+
+function getRandomPuzzle(exclude?: CrosswordPuzzle): CrosswordPuzzle {
+  let p = PUZZLES[Math.floor(Math.random() * PUZZLES.length)]
+  while (p === exclude && PUZZLES.length > 1) {
+    p = PUZZLES[Math.floor(Math.random() * PUZZLES.length)]
   }
-  return numbers;
+  return p
+}
+
+function formatTime(seconds: number): string {
+  const m = Math.floor(seconds / 60)
+  const s = seconds % 60
+  return `${m}:${s.toString().padStart(2, '0')}`
+}
+
+const CONFETTI_EMOJIS = ['🎉', '🎊', '✨', '⭐', '🎈']
+
+function ConfettiBurst({ burstKey }: { burstKey: number }) {
+  const pieces = Array.from({ length: 250 })
+  return (
+    <div key={burstKey} className="pointer-events-none fixed inset-0 overflow-hidden z-50">
+      {pieces.map((_, i) => {
+        const emoji = CONFETTI_EMOJIS[i % CONFETTI_EMOJIS.length]
+        const left = Math.random() * 100
+        const delay = Math.random() * 0.8
+        const duration = 3 + Math.random() * 3
+        return (
+          <span
+            key={i}
+            className="absolute top-0 text-2xl confetti-piece"
+            style={{ left: `${left}%`, animationDelay: `${delay}s`, animationDuration: `${duration}s` }}
+          >
+            {emoji}
+          </span>
+        )
+      })}
+    </div>
+  )
+}
+
+const STREAK_KEY = 'bombands_crossword_streak'
+type StreakData = { count: number; lastWinDate: string | null }
+
+function getStreak(): StreakData {
+  if (typeof window === 'undefined') return { count: 0, lastWinDate: null }
+  const raw = localStorage.getItem(STREAK_KEY)
+  return raw ? JSON.parse(raw) : { count: 0, lastWinDate: null }
+}
+
+function updateStreak(): StreakData {
+  const today = new Date().toDateString()
+  const current = getStreak()
+  if (current.lastWinDate === today) return current
+  const yesterday = new Date(Date.now() - 86400000).toDateString()
+  const next: StreakData = { count: current.lastWinDate === yesterday ? current.count + 1 : 1, lastWinDate: today }
+  localStorage.setItem(STREAK_KEY, JSON.stringify(next))
+  return next
+}
+
+const BEST_TIMES_KEY = 'bombands_crossword_besttimes'
+
+function getBestTime(theme: string): number | null {
+  if (typeof window === 'undefined') return null
+  const raw = localStorage.getItem(BEST_TIMES_KEY)
+  const times: Record<string, number> = raw ? JSON.parse(raw) : {}
+  return times[theme] ?? null
+}
+
+function maybeUpdateBestTime(theme: string, seconds: number): number {
+  const raw = localStorage.getItem(BEST_TIMES_KEY)
+  const times: Record<string, number> = raw ? JSON.parse(raw) : {}
+  const best = times[theme] === undefined || seconds < times[theme] ? seconds : times[theme]
+  times[theme] = best
+  localStorage.setItem(BEST_TIMES_KEY, JSON.stringify(times))
+  return best
 }
 
 export default function CrosswordPage() {
-  const [solution, setSolution] = useState<(string | null)[][]>([]);
-  const [placements, setPlacements] = useState<Placement[]>([]);
-  const [bounds, setBounds] = useState({ minR: 0, maxR: 0, minC: 0, maxC: 0 });
-  const [numbers, setNumbers] = useState<(number | null)[][]>([]);
-  const [userGrid, setUserGrid] = useState<(string | null)[][]>([]);
-  const inputRefs = useRef<Record<string, HTMLInputElement | null>>({});
+  const [mode, setMode] = useState<'daily' | 'practice'>('daily')
+  const [puzzle, setPuzzle] = useState<CrosswordPuzzle>(PUZZLES[0])
+  const [gridInfo, setGridInfo] = useState<(CellInfo | null)[][]>([])
+  const [entries, setEntries] = useState<string[][]>([])
+  const [selected, setSelected] = useState<[number, number] | null>(null)
+  const [direction, setDirection] = useState<ClueDirection>('across')
+  const [status, setStatus] = useState<'playing' | 'won'>('playing')
+  const [streak, setStreak] = useState<StreakData>({ count: 0, lastWinDate: null })
+  const [confettiKey, setConfettiKey] = useState<number | null>(null)
+  const [elapsed, setElapsed] = useState(0)
+  const [bestTime, setBestTime] = useState<number | null>(null)
+  const [copied, setCopied] = useState(false)
+  const confettiTimeout = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  const newPuzzle = useCallback(() => {
-    const gen = generateCrossword();
-    const b = computeBounds(gen.grid);
-    const rows = b.maxR - b.minR + 1, cols = b.maxC - b.minC + 1;
-    setSolution(gen.grid);
-    setPlacements(gen.placed);
-    setBounds(b);
-    setNumbers(buildNumbers(gen.grid, b));
-    setUserGrid(Array.from({ length: rows }, () => Array(cols).fill(null)));
-  }, []);
+  useEffect(() => {
+    setStreak(getStreak())
+  }, [])
 
-  useEffect(() => { newPuzzle(); }, [newPuzzle]);
+  const loadPuzzle = useCallback((p: CrosswordPuzzle) => {
+    const grid = buildGrid(p)
+    setPuzzle(p)
+    setGridInfo(grid)
+    setEntries(grid.map((row) => row.map(() => '')))
+    setBestTime(getBestTime(p.theme))
+    setSelected(null)
+    setDirection('across')
+    setStatus('playing')
+    setElapsed(0)
+  }, [])
 
-  function handleInput(r: number, c: number, raw: string) {
-    const v = raw.toUpperCase().replace(/[^A-Z]/, '');
-    setUserGrid(prev => {
-      const next = prev.map(row => [...row]);
-      next[r][c] = v || null;
-      return next;
-    });
-    if (v) {
-      const cols = bounds.maxC - bounds.minC + 1;
-      for (let cc = c + 1; cc < cols; cc++) {
-        const el = inputRefs.current[`${r}-${cc}`];
-        if (el) { el.focus(); break; }
-      }
+  useEffect(() => {
+    loadPuzzle(mode === 'daily' ? getDailyPuzzle() : getRandomPuzzle())
+  }, [mode, loadPuzzle])
+
+  useEffect(() => {
+    if (status !== 'playing') return
+    const interval = setInterval(() => setElapsed((e) => e + 1), 1000)
+    return () => clearInterval(interval)
+  }, [status, puzzle])
+
+  useEffect(() => {
+    if (gridInfo.length === 0) return
+    const allCorrect = gridInfo.every((row, r) =>
+      row.every((cell, c) => !cell || entries[r][c].toLowerCase() === cell.correctLetter)
+    )
+    if (allCorrect) setStatus('won')
+  }, [entries, gridInfo])
+
+  useEffect(() => {
+    if (status === 'won') {
+      if (mode === 'daily') setStreak(updateStreak())
+      const best = maybeUpdateBestTime(puzzle.theme, elapsed)
+      setBestTime(best)
+      if (confettiTimeout.current) clearTimeout(confettiTimeout.current)
+      setConfettiKey(Date.now())
+      confettiTimeout.current = setTimeout(() => setConfettiKey(null), 8000)
+    }
+    return () => {
+      if (confettiTimeout.current) clearTimeout(confettiTimeout.current)
+    }
+  }, [status, mode, puzzle, elapsed])
+
+  function findNextCell(row: number, col: number, dir: ClueDirection, back = false): [number, number] | null {
+    const step = back ? -1 : 1
+    let r = row
+    let c = col
+    while (true) {
+      r = dir === 'down' ? r + step : r
+      c = dir === 'across' ? c + step : c
+      if (r < 0 || c < 0 || r >= puzzle.size || c >= puzzle.size) return null
+      if (gridInfo[r][c]) return [r, c]
     }
   }
 
-  function handleKeyDown(r: number, c: number, e: React.KeyboardEvent<HTMLInputElement>) {
-    if (e.key === 'Backspace' && !userGrid[r]?.[c]) {
-      for (let cc = c - 1; cc >= 0; cc--) {
-        const el = inputRefs.current[`${r}-${cc}`];
-        if (el) { el.focus(); break; }
-      }
+  function handleCellClick(row: number, col: number) {
+    if (!gridInfo[row][col] || status !== 'playing') return
+    if (selected && selected[0] === row && selected[1] === col) {
+      setDirection((d) => (d === 'across' ? 'down' : 'across'))
+    } else {
+      setSelected([row, col])
     }
   }
 
-  const acrossClues = placements
-    .filter(p => p.dir === 'across')
-    .map(p => ({ n: numbers[p.row - bounds.minR]?.[p.col - bounds.minC], clue: p.clue }))
-    .sort((a, b) => (a.n ?? 0) - (b.n ?? 0));
-  const downClues = placements
-    .filter(p => p.dir === 'down')
-    .map(p => ({ n: numbers[p.row - bounds.minR]?.[p.col - bounds.minC], clue: p.clue }))
-    .sort((a, b) => (a.n ?? 0) - (b.n ?? 0));
+  function typeLetter(letter: string) {
+    if (!selected || status !== 'playing') return
+    const [r, c] = selected
+    setEntries((prev) => {
+      const next = prev.map((row) => [...row])
+      next[r][c] = letter
+      return next
+    })
+    const nextCell = findNextCell(r, c, direction)
+    if (nextCell) setSelected(nextCell)
+  }
 
-  const rows = bounds.maxR - bounds.minR + 1;
-  const cols = bounds.maxC - bounds.minC + 1;
+  function eraseLetter() {
+    if (!selected) return
+    const [r, c] = selected
+    if (entries[r][c]) {
+      setEntries((prev) => {
+        const next = prev.map((row) => [...row])
+        next[r][c] = ''
+        return next
+      })
+    } else {
+      const prevCell = findNextCell(r, c, direction, true)
+      if (prevCell) setSelected(prevCell)
+    }
+  }
+
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (status !== 'playing') return
+      const key = e.key.toLowerCase()
+      if (/^[a-z]$/.test(key)) {
+        typeLetter(key)
+      } else if (e.key === 'Backspace' || e.key === 'Delete') {
+        eraseLetter()
+      } else if (e.key === 'ArrowRight') {
+        setDirection('across')
+        if (selected) {
+          const next = findNextCell(selected[0], selected[1], 'across')
+          if (next) setSelected(next)
+        }
+      } else if (e.key === 'ArrowDown') {
+        setDirection('down')
+        if (selected) {
+          const next = findNextCell(selected[0], selected[1], 'down')
+          if (next) setSelected(next)
+        }
+      }
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [selected, direction, status, gridInfo, entries])
+
+  async function handleShare() {
+    const label = mode === 'daily' ? 'Daily' : 'Practice'
+    const text = `BOMBANDS Crossword (${label}) — Solved in ${formatTime(elapsed)}! 🎉\nPlay: https://is-project-2026.github.io/bombands-166488/games/crossword`
+    await navigator.clipboard.writeText(text)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  }
+
+  const activeClue = selected
+    ? puzzle.clues.find(
+        (c) =>
+          gridInfo[selected[0]][selected[1]]?.clueRefs.some(
+            (ref) => ref.direction === direction && ref.clueNumber === c.number
+          )
+      )
+    : null
 
   return (
-    <div className="p-6 max-w-4xl mx-auto">
-      <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
-        <p className="text-gray-500 text-sm">Fill in the grid</p>
-        <div className="flex gap-2">
-          <button className="flex items-center gap-1 px-3 py-1.5 border rounded text-sm">
-            ✓ Check
-          </button>
-          <button className="flex items-center gap-1 px-3 py-1.5 border rounded text-sm">
-            👁 Reveal
-          </button>
-          <button onClick={newPuzzle} className="flex items-center gap-1 px-3 py-1.5 border rounded text-sm">
-            ↻ New puzzle
-          </button>
-        </div>
-      </div>
+    <main className="flex justify-center p-4 sm:p-6">
+      <div className="w-full max-w-2xl flex flex-col items-center gap-4 border border-gray-300 dark:border-gray-700 rounded-xl bg-gray-50 dark:bg-black/40 p-4 sm:p-8 shadow-lg">
+        {confettiKey !== null && <ConfettiBurst burstKey={confettiKey} />}
 
-      <div className="flex gap-6 flex-wrap">
+        <h1 className="text-xl font-bold text-gray-900 dark:text-white">Crossword</h1>
+
+        <div className="flex gap-2 flex-wrap justify-center">
+          <button
+            onClick={() => setMode('daily')}
+            className={`px-4 py-2 rounded border transition active:scale-95 hover:brightness-110 ${
+              mode === 'daily'
+                ? 'bg-gray-900 text-white border-gray-900 dark:bg-white dark:text-black dark:border-white'
+                : 'bg-transparent text-gray-600 dark:text-gray-300 border-gray-400 dark:border-gray-600'
+            }`}
+          >
+            Daily
+          </button>
+          <button
+            onClick={() => setMode('practice')}
+            className={`px-4 py-2 rounded border transition active:scale-95 hover:brightness-110 ${
+              mode === 'practice'
+                ? 'bg-gray-900 text-white border-gray-900 dark:bg-white dark:text-black dark:border-white'
+                : 'bg-transparent text-gray-600 dark:text-gray-300 border-gray-400 dark:border-gray-600'
+            }`}
+          >
+            Practice
+          </button>
+          {mode === 'practice' && status === 'won' && (
+            <button
+              onClick={() => loadPuzzle(getRandomPuzzle(puzzle))}
+              className="px-4 py-2 rounded bg-blue-500 text-white transition active:scale-95 hover:brightness-110"
+            >
+              New puzzle
+            </button>
+          )}
+        </div>
+
+        <div className="flex flex-col items-center gap-1 text-sm text-gray-600 dark:text-gray-400">
+          {mode === 'daily' && <p>🔥 Streak: {streak.count}</p>}
+          <p>Theme: {puzzle.theme}</p>
+          <p>
+            ⏱ {formatTime(elapsed)}
+            {bestTime !== null && <span className="ml-2">🏆 Best: {formatTime(bestTime)}</span>}
+          </p>
+        </div>
+
+        {activeClue && (
+          <p className="text-sm font-medium text-blue-700 dark:text-blue-300 text-center">
+            {activeClue.number} {activeClue.direction === 'across' ? 'Across' : 'Down'}: {activeClue.clue}
+          </p>
+        )}
+
         <div
-          className="inline-grid gap-0.5"
-          style={{ gridTemplateColumns: `repeat(${cols}, 28px)`, gridTemplateRows: `repeat(${rows}, 28px)` }}
+          className="grid gap-0.5 select-none"
+          style={{ gridTemplateColumns: `repeat(${puzzle.size}, minmax(0, 1fr))` }}
         >
-          {Array.from({ length: rows }).map((_, r) =>
-            Array.from({ length: cols }).map((_, c) => {
-              const letter = solution[r + bounds.minR]?.[c + bounds.minC];
-              if (letter === null || letter === undefined) {
-                return <div key={`${r}-${c}`} className="bg-gray-100" />;
+          {gridInfo.flatMap((row, r) =>
+            row.map((cell, c) => {
+              const isSelected = selected && selected[0] === r && selected[1] === c
+              const isInActiveClue =
+                selected &&
+                cell &&
+                gridInfo[selected[0]][selected[1]]?.clueRefs.some(
+                  (ref) =>
+                    ref.direction === direction &&
+                    activeClue &&
+                    ref.clueNumber === activeClue.number
+                ) &&
+                cell.clueRefs.some(
+                  (ref) => ref.direction === direction && activeClue && ref.clueNumber === activeClue.number
+                )
+              const isFilled = cell && entries[r][c] !== ''
+              const isCorrect = cell && entries[r][c].toLowerCase() === cell.correctLetter
+
+              if (!cell) {
+                return <div key={`${r}-${c}`} className="w-8 h-8 sm:w-9 sm:h-9 bg-gray-900 dark:bg-black" />
               }
-              const num = numbers[r]?.[c];
+
               return (
-                <div key={`${r}-${c}`} className="relative border border-gray-400 bg-white">
-                  {num && <span className="absolute top-0 left-0.5 text-[9px] text-gray-400">{num}</span>}
-                  <input
-                    ref={el => { inputRefs.current[`${r}-${c}`] = el; }}
-                    maxLength={1}
-                    value={userGrid[r]?.[c] ?? ''}
-                    onChange={e => handleInput(r, c, e.target.value)}
-                    onKeyDown={e => handleKeyDown(r, c, e)}
-                    className="w-full h-full text-center font-medium uppercase bg-transparent outline-none text-sm"
-                  />
-                </div>
-              );
+                <button
+                  key={`${r}-${c}`}
+                  onClick={() => handleCellClick(r, c)}
+                  disabled={status !== 'playing'}
+                  className={`relative w-8 h-8 sm:w-9 sm:h-9 flex items-center justify-center text-sm sm:text-base font-bold uppercase border transition ${
+                    isSelected
+                      ? 'bg-blue-400 border-blue-600 text-white'
+                      : isInActiveClue
+                      ? 'bg-blue-100 dark:bg-blue-900/40 border-gray-400 dark:border-gray-600'
+                      : status === 'won' && isCorrect
+                      ? 'bg-green-200 dark:bg-green-900/50 border-green-400 dark:border-green-700 text-green-900 dark:text-green-200'
+                      : 'bg-white dark:bg-gray-900 border-gray-400 dark:border-gray-600 text-gray-900 dark:text-white hover:brightness-95 dark:hover:brightness-125'
+                  }`}
+                >
+                  {cell.numbers.length > 0 && (
+                    <span className="absolute top-0 left-0.5 text-[7px] sm:text-[8px] font-normal text-gray-500 dark:text-gray-400">
+                      {cell.numbers[0]}
+                    </span>
+                  )}
+                  {isFilled ? entries[r][c] : ''}
+                </button>
+              )
             })
           )}
         </div>
 
-        <div className="flex gap-6 flex-1 min-w-[200px]">
+        {status === 'playing' && (
+          <div className="flex gap-1 flex-wrap justify-center max-w-sm">
+            {'abcdefghijklmnopqrstuvwxyz'.split('').map((letter) => (
+              <button
+                key={letter}
+                onClick={() => typeLetter(letter)}
+                disabled={!selected}
+                className="w-7 h-8 sm:w-8 sm:h-9 rounded bg-gray-200 dark:bg-gray-800 text-gray-900 dark:text-white text-xs font-semibold uppercase border border-gray-400 dark:border-gray-600 transition active:scale-90 hover:brightness-110 disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                {letter}
+              </button>
+            ))}
+            <button
+              onClick={eraseLetter}
+              disabled={!selected}
+              className="px-3 h-8 sm:h-9 rounded bg-gray-400 dark:bg-gray-700 text-white text-xs font-semibold transition active:scale-90 hover:brightness-110 disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              ⌫
+            </button>
+          </div>
+        )}
+
+        <div className="w-full grid grid-cols-2 gap-4 text-xs text-gray-600 dark:text-gray-400">
           <div>
-            <div className="text-sm font-medium text-gray-500 mb-1">Across</div>
-            {acrossClues.map((i, idx) => <div key={idx} className="text-sm">{i.n}. {i.clue}</div>)}
+            <p className="font-semibold text-gray-900 dark:text-white mb-1">Across</p>
+            {puzzle.clues.filter((c) => c.direction === 'across').map((c) => (
+              <p key={`a-${c.number}`}>{c.number}. {c.clue}</p>
+            ))}
           </div>
           <div>
-            <div className="text-sm font-medium text-gray-500 mb-1">Down</div>
-            {downClues.map((i, idx) => <div key={idx} className="text-sm">{i.n}. {i.clue}</div>)}
+            <p className="font-semibold text-gray-900 dark:text-white mb-1">Down</p>
+            {puzzle.clues.filter((c) => c.direction === 'down').map((c) => (
+              <p key={`d-${c.number}`}>{c.number}. {c.clue}</p>
+            ))}
           </div>
         </div>
+
+        {status === 'won' && (
+          <>
+            <p className="win-pop text-green-600 dark:text-green-400 font-bold text-lg">
+              Solved in {formatTime(elapsed)}! 🎉
+            </p>
+            <button
+              onClick={handleShare}
+              className="px-4 py-2 rounded bg-gray-900 text-white dark:bg-white dark:text-black font-semibold transition active:scale-95 hover:brightness-110"
+            >
+              {copied ? 'Copied!' : 'Share Results'}
+            </button>
+          </>
+        )}
       </div>
-    </div>
-  );
+    </main>
+  )
 }
