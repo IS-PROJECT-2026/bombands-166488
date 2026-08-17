@@ -14,14 +14,14 @@ your play.
 
 ## Games
 
-| Game | Owner |
-|---|---|
-| Sudoku | Kirui Sharlet Jerono |
-| Word Search | Deborah Kaburu |
-| Wordle | Bwibo Ethan Nimrod |
-| Scrabble | Githinji Nathan Rugo |
-| Hangman | Wangeci Brown Kamau |
-| Crossword | Njenga Martin Njuguna |
+| Game |
+|---|
+| Sudoku | 
+| Word Search |
+| Wordle |
+| Scrabble |
+| Hangman |
+| Crossword |
 
 ## Running Locally
 
@@ -48,13 +48,9 @@ Open http://localhost:3000
 
 | Admission No. | Name | Role |
 |---|---|---|
-| 166488 | Bwibo Ethan Nimrod | Repo owner / Wordle |
-| 160588 | Kirui Sharlet Jerono | Sudoku |
-| 166531 | Deborah Kaburu | Word Search |
-| 166386 | Githinji Nathan Rugo | Scrabble |
-| 162831 | Wangeci Brown Kamau | Hangman |
-| 165852 | Njenga Martin Njuguna | Crossword |
+| 166488 | Bwibo Ethan Nimrod | Repo owner / SWE |
+
 
 ## Live Site
 
-Deployed via GitHub Pages: *link once first deploy succeeds*
+Deployed via GitHub Pages: (https://is-project-2026.github.io/bombands-166488/)
