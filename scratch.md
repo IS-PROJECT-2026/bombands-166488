@@ -2,3 +2,4 @@
 A simple file to test and work on merge conflicts
 
 To do and delete this line
+<!-- Merge Conflict 2 -->
