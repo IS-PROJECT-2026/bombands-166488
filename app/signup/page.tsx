@@ -21,26 +21,37 @@ export default function SignupPage() {
     return null
   }
 
-  async function handleSubmit(e: React.FormEvent) {
+    async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     const validationError = validate()
     if (validationError) {
-      setError(validationError)
-      return
+        setError(validationError)
+        return
     }
 
     setLoading(true)
     setError('')
-    const { error: signupError } = await supabase.auth.signUp({ email, password })
+    const { data, error: signupError } = await supabase.auth.signUp({ email, password })
     setLoading(false)
 
     if (signupError) {
-      setError(signupError.message)
-      return
+        if (signupError.message.toLowerCase().includes('already registered')) {
+        setError('An account with this email already exists. Try logging in instead.')
+        } else {
+        setError(signupError.message)
+        }
+        return
     }
 
-    router.push('/')
-  }
+    // Email confirmation is ON and this email is already registered —
+    // Supabase returns no error but an empty identities array as the signal
+    if (data.user && data.user.identities && data.user.identities.length === 0) {
+        setError('An account with this email already exists. Try logging in instead.')
+        return
+    }
+
+    router.push('/login')
+    }
 
   return (
     <main className="flex justify-center p-6">
