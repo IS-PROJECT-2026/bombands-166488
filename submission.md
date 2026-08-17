@@ -39,31 +39,29 @@
 
 ## 4. Screenshots of Key GitHub Features
 
-> Paste each screenshot directly into this file via the GitHub web editor (click the blank line below each prompt, then Ctrl+V).
-
 ### A. Milestones and Issues
-
-[PASTE YOUR MILESTONE SCREENSHOT DIRECTLY HERE]
+<img width="1893" height="744" alt="Screenshot 2026-08-17 234409" src="https://github.com/user-attachments/assets/08115d8d-8081-41d2-878e-e9b99e302a5a" />
 
 * **Caption:** Four milestones (Core Platform, Authentication, Game Modules, Polish & Deployment) with granular issues linked to each, tracking the full build from setup through all six games.
 
 ### B. Project Board
 
-[PASTE YOUR PROJECT BOARD SCREENSHOT DIRECTLY HERE]
+<img width="1917" height="966" alt="Screenshot 2026-08-14 033414" src="https://github.com/user-attachments/assets/ed0b4904-08a4-45b8-8f62-176686361cf7" />
 
 * **Caption:** Kanban board with issues moved across To Do / In Progress / Done as each game and feature was completed.
 
 ### C. Branching Architecture
+<img width="1355" height="958" alt="Screenshot 2026-08-17 152140" src="https://github.com/user-attachments/assets/76650550-96d4-4198-a841-b5785a47bd30" />
 
-[PASTE YOUR BRANCHING SCREENSHOT DIRECTLY HERE — see steps below to get this]
 
 * **Caption:** Feature branches follow the `feat/`, `fix/`, and `style/` naming convention, each scoped to a single issue (e.g. `feat/6-wordle-game`, `feat/sudoku-improvements`).
 
 ### D. Pull Requests & Traceability
 
-[PASTE YOUR PULL REQUEST SCREENSHOT DIRECTLY HERE]
+<img width="1868" height="940" alt="image" src="https://github.com/user-attachments/assets/6ffa0e5c-c104-46f3-a312-4655794c2514" />
 
-* **Caption:** [Fill in: which issue does this PR close, and what does it cover?]
+
+* **Caption:** List of some of my many various Pull Requests that touched on different issues `feat/`, `docs/`, `game/`, `fix/`, and `style/`
 
 ---
 
@@ -75,19 +73,18 @@
 
 #### Step 1: Generating the Clash
 
-[PASTE SCREENSHOT OF ATTEMPTED MERGE / TERMINAL WARNING HERE]
+<img width="1882" height="894" alt="Screenshot 2026-08-14 040740" src="https://github.com/user-attachments/assets/69a85dd3-4391-45e7-babb-7179dfce9670" />
 
-* **Caption:** Merging `branch-A` into `branch-B` after both branches modified the same line of the same file, triggering Git's standard content conflict warning.
+* **Caption:** Merging `style/3-home-page` into `main` after both branches modified the same line of the same file, triggering Git's standard content conflict warning.
 
 #### Step 2: Inside the Code Editor (Conflict Markers)
 
-[PASTE SCREENSHOT OF RAW CONFLICT MARKERS HERE]
-
+<img width="1882" height="894" alt="Screenshot 2026-08-14 040740" src="https://github.com/user-attachments/assets/69a85dd3-4391-45e7-babb-7179dfce9670" />
 * **Caption:** Raw `<<<<<<< HEAD` / `=======` / `>>>>>>>` markers showing both versions of the disputed line side by side; resolved by keeping the intended final version and removing the markers.
 
 #### Step 3: Resolution & Clean Merge
 
-[PASTE SCREENSHOT OF CLEAN RESOLUTION HERE]
+<img width="1883" height="697" alt="image" src="https://github.com/user-attachments/assets/641d777f-0f7d-4741-84f9-cb7f12949816" />
 
 * **Caption:** Clean commit history after resolving the conflict, staging the merged file, and completing the merge.
 
@@ -99,7 +96,8 @@
 
 **Why does this cause trigger a conflict?** Git can't automatically decide whether to keep an edit made to content that no longer exists on the other branch — it has no way to know if the edit should survive the deletion or not, so it stops and asks.
 
-[PASTE SCREENSHOT OF CONFLICT MARKERS FOR CONFLICT 2 HERE]
+<img width="1508" height="319" alt="Screenshot 2026-08-17 155042" src="https://github.com/user-attachments/assets/e7cec283-6380-43a0-948a-d9acf61bbd49" />
+
 
 * **Caption:** `conflict-test-2a` edited a line in `scratch.md` while `conflict-test-2b` deleted the surrounding block containing that line, producing a genuine edit/delete conflict on merge.
 
@@ -111,7 +109,8 @@
 
 **Why does this cause trigger a conflict?** Since both branches added the same filename with no shared history for that file between them, Git has no common ancestor version to diff against and can't determine which version is correct — so it surfaces both and asks for a manual resolution.
 
-[PASTE SCREENSHOT OF CONFLICT MARKERS FOR CONFLICT 3 HERE]
+<img width="1507" height="1000" alt="Screenshot 2026-08-17 220117" src="https://github.com/user-attachments/assets/f2c59bd7-5c18-4d5a-be41-a71bfbd8defc" />
+
 
 * **Caption:** `conflict-test-4a` and `conflict-test-4b` each independently created `notes.md` with different content; merging produced `CONFLICT (add/add): Merge conflict in notes.md`, resolved by keeping both versions' content.
 
